@@ -1,0 +1,34 @@
+#cloud-config
+
+write_files:
+  - content: |
+      - name: install haproxy
+        hosts: 127.0.0.1
+        pre_tasks:
+           - name: stop consul
+             service: name=consul state=stopped
+           - name: clean /opt/consul/data/serf/local.keyring
+             file: path=/opt/consul/data/serf/local.keyring state=absent
+    path: /usr/src/cloud/playbook.yml
+    permissions: '0400'
+
+runcmd:
+  - |
+      bash <<'EOF'
+      export COMPLETED=false
+      while [ "$COMPLETED" == "false" ]; do
+        (
+          set -e errexit
+          set -o pipefail
+          # workaround https://github.com/ansible/ansible/issues/21562
+          export HOME=/root
+          cd /usr/src/cloud
+          source venv/bin/activate
+          ansible-playbook -e ansible_python_interpreter=/usr/bin/python --connection=local playbook.yml
+        ) >> /var/log/cloud-scripts.log 2>&1
+        if [ $? == 0 ]; then
+          COMPLETED=true
+        fi
+        sleep 1
+      done
+      EOF

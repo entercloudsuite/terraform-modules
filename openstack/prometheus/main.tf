@@ -1,61 +1,34 @@
-# Create ssh firewall policy
-module "prometheus_ssh_sg" {
-  source = "github.com/entercloudsuite/terraform-modules//security?ref=2.6"
-  name = "prometheus_ssh_sg"
+module "haproxy" {
+  source = "github.com/entercloudsuite/terraform-modules//openstack/instance?ref=2.7"
+  name = "${var.name}"
+  quantity = "${var.quantity}"
+  external = "${var.external}"
   region = "${var.region}"
-  protocol = "tcp"
-  port_range_min = 22
-  port_range_max = 22
-  allow_remote = "0.0.0.0/0"
-}
-
-# Create web firewall policy
-module "prometheus_web_sg" {
-  source = "github.com/entercloudsuite/terraform-modules//security?ref=2.6"
-  name = "prometheus_web_sg"
-  region = "${var.region}"
-  protocol = "tcp"
-  port_range_min = 9090
-  port_range_max = 9093
-  allow_remote = "0.0.0.0/0"
-}
-
-# Get network CIDR
-data "openstack_networking_network_v2" "network" {
-  name = "${var.network_name}"
-  region = "${var.region}"
-}
-
-data "openstack_networking_subnet_v2" "subnet" {
-  network_id = "${data.openstack_networking_network_v2.network.id}"
-  region = "${var.region}"
-}
-
-# Create internal firewall policy
-module "prometheus_internal_sg" {
-  source = "github.com/entercloudsuite/terraform-modules//security?ref=2.6"
-  name = "prometheus_internal_sg"
-  region = "${var.region}"
-  protocol = ""
-  allow_remote = "${data.openstack_networking_subnet_v2.subnet.cidr}"
-}
-
-# Create instance
-module "prometheus" {
-  source = "github.com/entercloudsuite/terraform-modules//instance?ref=2.6"
-  name = "prometheus"
-  region = "${var.region}"
-  image = "${var.image}"
-  quantity = 1
-  external = "true"
-  discovery = "true"
   flavor = "${var.flavor}"
   network_name = "${var.network_name}"
-  sec_group = "${concat(var.custom_secgroups, list("${module.prometheus_internal_sg.sg_id}"))}"
-  keypair = "${var.keyname}"
-  tags = "${var.tags}"
+  sec_group = "${var.sec_group}"
+  discovery = "${var.discovery}"
+  keypair = "${var.keypair}"
+  userdata = "${data.template_file.cloud-config.*.rendered}"
+  image = "${var.image}"
+  tags = {
+    "server_group" = "${var.name}"
+  }
 }
-  
-output "instance" {
-  value = "${module.prometheus.instance}"
+data "template_file" "cloud-config" {
+  template = "${file("${path.module}/cloud-config.yml")}"
+  count = "${var.quantity}"
+  vars {
+    name = "${var.name}"
+    number = "${count.index}"
+    hostname = "${var.name}-${count.index}"
+    prometheus_alertmanager_conf_main = "${var.prometheus_alertmanager_conf_main}"
+    prometheus_prometheus_conf_main = "${var.prometheus_prometheus_conf_main}"
+    prometheus_blackbox_exporter_main_conf = "${var.prometheus_blackbox_exporter_main_conf}"
+    prometheus_rules = "${var.prometheus_rules}"
+    consul = "${var.consul}"
+    consul_port = "${var.consul_port}"
+    consul_datacenter = "${var.consul_datacenter}"
+    consul_encrypt = "${var.consul_encrypt}"
+  }
 }
