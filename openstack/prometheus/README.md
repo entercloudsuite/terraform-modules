@@ -1,4 +1,3 @@
-==== BASE ====
 # ECS Module for create HAproxy Standalone NO ha
 
 Simple example

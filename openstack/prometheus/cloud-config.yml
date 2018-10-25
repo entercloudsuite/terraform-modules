@@ -2,13 +2,29 @@
 
 write_files:
   - content: |
-      - name: install haproxy
+      - name: install Prometheus Server
         hosts: 127.0.0.1
         pre_tasks:
            - name: stop consul
              service: name=consul state=stopped
            - name: clean /opt/consul/data/serf/local.keyring
              file: path=/opt/consul/data/serf/local.keyring state=absent
+           - name: create prometheus prometehus conf main
+             copy:
+               content: "${prometheus_prometheus_conf_main}"
+               dest: /usr/src/cloud/prometheus.yml
+           - name: create prometheus alertmanager conf
+             copy:
+               content: "${prometheus_alertmanager_conf_main}"
+               dest: "/usr/src/cloud/alertmanager.yml"
+           - name: create prometheus expoter main conf
+             copy:
+               content: "${prometheus_blackbox_exporter_main_conf}"
+               dest: "/usr/src/cloud/config_blackbox_exporter.yaml"
+           - name: create Prometheus Rules
+             copy:
+               content: "${prometheus_rules}"
+               dest: "/usr/src/cloud/prometheus_rules.rules"
     path: /usr/src/cloud/playbook.yml
     permissions: '0400'
 
