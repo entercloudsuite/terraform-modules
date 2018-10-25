@@ -12,23 +12,94 @@ write_files:
            - name: create prometheus prometehus conf main
              copy:
                content: | 
-                 "${prometheus_prometheus_conf_main}"
+                 ${prometheus_prometheus_conf_main}
                dest: /usr/src/cloud/prometheus.yml
            - name: create prometheus alertmanager conf
              copy:
                content: |
-                 "${prometheus_alertmanager_conf_main}"
+                 ${prometheus_alertmanager_conf_main}
                dest: "/usr/src/cloud/alertmanager.yml"
            - name: create prometheus expoter main conf
              copy:
                content: | 
-                 "${prometheus_blackbox_exporter_main_conf}"
+                 ${prometheus_blackbox_exporter_main_conf}
                dest: "/usr/src/cloud/config_blackbox_exporter.yaml"
            - name: create Prometheus Rules
              copy:
                content: |
-                 "${prometheus_rules}"
+                 ${prometheus_rules}
                dest: "/usr/src/cloud/prometheus_rules.rules"
+        roles:
+          - role: ansible-prometheus
+            prometheus_conf_main: "prometheus.yml"
+            prometheus_alertmanager_conf: "alertmanager.yml"
+            prometheus_rule_files:
+              basic_rules:
+                src:  "prometheus_rules.rules"
+                dest: prometheus_rules.rules
+          - role: entercloudsuite.prometheus-exporter
+            prometheus_exporter_name: blackbox_exporter
+            prometheus_exporter_version: 0.12.0
+            prometheus_exporter_conf_main: "config_blackbox_exporter.yaml"
+            prometheus_exporter_config_flags:
+            "--config.file": "{{ prometheus_exporter_custom_conf_destination }}/config_blackbox_exporter.yaml"
+          - role: cloudalchemy.grafana
+            grafana_security: { admin_user: admin, admin_password: "admin" }
+            grafana_datasources:
+              - name: prometheus
+                type: prometheus
+                access: proxy
+                url: 'http://localhost:9090'
+                basicAuth: false
+            grafana_dashboards:
+              - dashboard_id: 5174
+                revision_id: 1
+                datasource: prometheus
+          - role: entercloudsuite.consul
+            consul_config_validate: "{{ consul_user_home }}/bin/consul validate -config-format=json %s"
+            consul_configs:
+              main:
+                bind_addr: 0.0.0.0
+                client_addr: 0.0.0.0
+                node_name: "{{ ansible_hostname }}"
+                data_dir: "{{ consul_data_dir }}"
+                encrypt: "${consul_encrypt}"
+                datacenter: "${consul_datacenter}"
+                enable_syslog: true
+                server: false
+                ui: true
+                enable_script_checks: true
+                services:
+                  - name: "${name}"
+                    checks:
+                      - http: "http://localhost@127.0.0.1:9090"
+                        method: "GET"
+                        interval: "2s"
+                  - name: "exporter_node"
+                    port: 9100
+                  - name: "metrics"
+                    port: 9090
+                    checks:
+                      - http: "http://127.0.0.1:9090"
+                        method: "GET"
+                        interval: "2s"
+                  - name: "exporter_prometheus"
+                    port: 9090
+                  - name: "monitor"
+                    port: 9093
+                    checks:
+                      - http: "http://127.0.0.1:9093"
+                        method: "GET"
+                        interval: "2s"
+                  - name: "graph"
+                    port: 3000
+                    checks:
+                      - http: "http://127.0.0.1:3000"
+                        method: "GET"
+                        interval: "2s"
+                rejoin_after_leave: true
+                retry_join:
+                  - "${consul}"
     path: /usr/src/cloud/playbook.yml
     permissions: '0400'
 
