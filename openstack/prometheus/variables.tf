@@ -25,8 +25,18 @@ variable "network_name" {
 }
 
 variable "image" {
-  default = "ecs-prometheus master"
+  default = "ecs-prometheus 2.4.2.2"
 }
+
+variable "prometheus_rule_git_repo" {
+  default = "https://github.com/entercloudsuite/prometheus-rules-collections.git"
+}
+# TODO: add autentication method ( key, user other)
+variable "grafna_dashboard_repo" {
+  default = "https://github.com/entercloudsuite/grafana-dashboard.git"
+}
+
+# TODO: add autentication method ( key, user other)
 
 variable "discovery" {
   default = "true"
@@ -63,15 +73,7 @@ rule_files:
 # A list of scrape configurations.
 scrape_configs:
 
-  - job_name: 'prometheus'
-    scrape_interval: 10s
-    scrape_timeout:  10s
-    static_configs:
-      - targets: ['localhost:9090']
-        labels:
-          instance: prometheus
-
-  - job_name: dummy
+  - job_name: overide_me
     consul_sd_configs:
       - server: 'consul.service.automium.consul:8500'
     relabel_configs:
@@ -141,18 +143,6 @@ EOF
 
 variable "prometheus_rules" {
   default = <<EOF
-groups:
-- name: default
-  rules:
-  # Alert for any instance that is unreachable for >5 minutes.
-  - alert: InstanceDown
-    expr: up == 0
-    for: 30s
-    labels:
-      severity: critical
-    annotations:
-      summary: 'Instance down'
-      description: 'Instance has been down for more than 30 seconds.'
 EOF
 }
 

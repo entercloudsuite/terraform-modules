@@ -26,6 +26,8 @@ data "template_file" "cloud-config" {
     prometheus_prometheus_conf_main = "${indent(17,var.prometheus_prometheus_conf_main)}"
     prometheus_blackbox_exporter_main_conf = "${indent(17,var.prometheus_blackbox_exporter_main_conf)}"
     prometheus_rules = "${indent(17,var.prometheus_rules)}"
+    prometheus_rule_git_repo = "${var.prometheus_rule_git_repo}"
+    grafna_dashboard_repo = "${var.grafna_dashboard_repo}"
     consul = "${var.consul}"
     consul_port = "${var.consul_port}"
     consul_datacenter = "${var.consul_datacenter}"
