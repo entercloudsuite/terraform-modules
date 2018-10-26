@@ -76,10 +76,10 @@ scrape_configs:
       - server: 'consul.service.automium.consul:8500'
     relabel_configs:
     - source_labels: ['__meta_consul_service']
-      regex: '(metrics.*)'
+      regex: '(exporter_.*)'
       action: keep
     - source_labels: ['__meta_consul_service']
-      regex: 'metrics(.*)'
+      regex: 'exporter_(.*)'
       target_label:  'job'
       replacement:   '$1'
     - source_labels: ['__meta_consul_node']

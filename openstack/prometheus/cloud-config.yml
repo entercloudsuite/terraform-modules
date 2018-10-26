@@ -85,6 +85,8 @@ write_files:
                         interval: "2s"
                   - name: "exporter_prometheus"
                     port: 9090
+                  - name: "blackbox_expoter"
+                    port: 9115
                   - name: "monitor"
                     port: 9093
                     checks:
