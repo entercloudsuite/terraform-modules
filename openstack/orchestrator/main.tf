@@ -1,5 +1,5 @@
 module "orchestrator" {
-  source = "github.com/entercloudsuite/terraform-modules//openstack/instance?ref=2.7"
+  source = "github.com/entercloudsuite/terraform-modules//openstack/instance?ref=feature"
   name = "${var.name}"
   image = "${var.image}"
   quantity = "${var.quantity}"
@@ -38,5 +38,28 @@ data "template_file" "cloud-config" {
     consul_port = "${var.consul_port}" 
     consul_datacenter = "${var.consul_datacenter}" 
     consul_encrypt = "${var.consul_encrypt}" 
+  }
+}
+
+resource "null_resource" "cleanup" {
+  count = "${var.quantity}"
+  provisioner "local-exec" {
+    when = "destroy"
+    command= <<EOF
+chmod +x cleanup.sh
+apk update || true
+apk add screen || true
+while [ ! -f /usr/bin/screen ]; do echo "waiting for screen"; sleep 1; done
+screen -d -m ./cleanup.sh $PPID
+EOF
+    working_dir = "${path.module}"
+    environment {
+      _NAME = "${var.name}"
+      _NUMBER = "${count.index}"
+      _HOSTNAME = "${var.name}-${count.index}"
+      _CONSUL = "${var.consul}" 
+      _CONSUL_PORT = "${var.consul_port}" 
+      _CONSUL_DATACENTER = "${var.consul_datacenter}" 
+    }
   }
 }
