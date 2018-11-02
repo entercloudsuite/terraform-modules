@@ -29,6 +29,9 @@ write_files:
                content: |
                  ${prometheus_rules}
                dest: "/usr/src/cloud/prometheus_rules.rules"
+           - name: configure grafana repo
+             set_fact:
+               grafna_dashboard_repo: ${grafna_dashboard_repo}
         roles:
           - role: ansible-prometheus
             prometheus_conf_main: "prometheus.yml"
@@ -41,6 +44,7 @@ write_files:
             prometheus_exporter_name: blackbox_exporter
             prometheus_exporter_version: 0.12.0
             prometheus_exporter_conf_main: "config_blackbox_exporter.yaml"
+            prometheus_rule_git_repo: "${prometheus_rule_git_repo}"
             prometheus_exporter_config_flags:
             "--config.file": "{{ prometheus_exporter_custom_conf_destination }}/config_blackbox_exporter.yaml"
           - role: cloudalchemy.grafana
@@ -104,7 +108,7 @@ write_files:
               path: /tmp/grafana-tmp-dashboard
               state: directory
 
-          - name: get grafana dashboard from {{grafna_dashboard_repo}}
+          - name: get grafana dashboard from {{grafna_dashboard_repo}}""
             git:
               repo: "{{ grafna_dashboard_repo }}"
               dest: /tmp/grafana-tmp-dashboard
