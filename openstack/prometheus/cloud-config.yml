@@ -51,10 +51,6 @@ write_files:
                 access: proxy
                 url: 'http://localhost:9090'
                 basicAuth: false
-            grafana_dashboards:
-              - dashboard_id: 5174
-                revision_id: 1
-                datasource: prometheus
           - role: entercloudsuite.consul
             consul_config_validate: "{{ consul_user_home }}/bin/consul validate -config-format=json %s"
             consul_configs:
@@ -102,6 +98,32 @@ write_files:
                 rejoin_after_leave: true
                 retry_join:
                   - "${consul}"
+        post_tasks:
+          - name: create dashboard-repo folder
+            file:
+              path: /tmp/grafana-tmp-dashboard
+              state: directory
+
+          - name: get grafana dashboard from {{grafna_dashboard_repo}}
+            git:
+              repo: "{{ grafna_dashboard_repo }}"
+              dest: /tmp/grafana-tmp-dashboard
+
+          - name: get list of dashboard
+            find:
+              paths: /tmp/grafana-tmp-dashboard
+              patterns: "*.json"
+            register: dashboard_list
+      
+          - name: Import Grafana dashboard
+            grafana_dashboard:
+              grafana_url: http://localhost:3000
+              slug: "{{ item.path.split('/')[-1].replace('.json','')  }}"
+              state: present
+              message: Updated by ansible
+              path: "{{ item.path }}"
+            with_items: "{{ dashboard_list.files }}"
+
     path: /usr/src/cloud/playbook.yml
     permissions: '0400'
 
