@@ -81,3 +81,38 @@ resource "consul_keys" "bootstrap" {
     ignore_changes = ["key"]
   }
 }
+
+resource "null_resource" "cleanup" {
+  count = "${var.quantity}"
+  provisioner "local-exec" {
+    when = "destroy"
+    command= <<EOF
+chmod +x cleanup.sh
+apk update || true
+apk add screen || true
+while [ ! -f /usr/bin/screen ]; do echo "waiting for screen"; sleep 1; done
+sleep 60
+#screen -d -m ./cleanup.sh $PPID
+./cleanup.sh
+EOF
+    working_dir = "${path.module}"
+    environment {
+      _NAME = "${var.name}"
+      _NUMBER = "${count.index}"
+      _HOSTNAME = "${var.name}-${count.index}"
+      _CONSUL = "${var.consul}"
+      _CONSUL_PORT = "${var.consul_port}"
+      _CONSUL_DATACENTER = "${var.consul_datacenter}"
+      _MYSQL_PORT = "${var.mysql_port}"
+      OS_AUTH_URL = "${var.os_api}"
+      OS_REGION_NAME = "${var.os_region}"
+      OS_TENANT_NAME = "${var.os_project}"
+      OS_USERNAME = "${var.os_user}"
+      OS_PASSWORD = "${var.os_password}"
+      _ORCHESTRATOR = "${var.orchestrator}"
+      _ORCHESTRATOR_PORT = "${var.orchestrator_port}"
+      _ORCHESTRATOR_USER = "${var.orchestrator_user}"
+      _ORCHESTRATOR_PASSWORD = "${var.orchestrator_password}"
+    }
+  }
+}

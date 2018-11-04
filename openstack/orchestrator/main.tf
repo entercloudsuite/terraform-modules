@@ -1,5 +1,5 @@
 module "orchestrator" {
-  source = "github.com/entercloudsuite/terraform-modules//openstack/instance?ref=feature"
+  source = "github.com/entercloudsuite/terraform-modules//openstack/instance?ref=2.7"
   name = "${var.name}"
   image = "${var.image}"
   quantity = "${var.quantity}"
@@ -49,8 +49,10 @@ resource "null_resource" "cleanup" {
 chmod +x cleanup.sh
 apk update || true
 apk add screen || true
-while [ ! -f /usr/bin/screen ]; do echo "waiting for screen"; sleep 1; done
-screen -d -m ./cleanup.sh $PPID
+#while [ ! -f /usr/bin/screen ]; do echo "waiting for screen"; sleep 1; done
+#screen -d -m ./cleanup.sh $PPID
+sleep 60
+./cleanup.sh
 EOF
     working_dir = "${path.module}"
     environment {
