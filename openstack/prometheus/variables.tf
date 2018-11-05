@@ -25,7 +25,7 @@ variable "network_name" {
 }
 
 variable "image" {
-  default = "ecs-prometheus 2.4.2.2"
+  default = "ecs-prometheus 2.4.2.3"
 }
 
 variable "prometheus_rule_git_repo" {

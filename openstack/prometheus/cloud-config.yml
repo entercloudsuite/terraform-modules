@@ -103,6 +103,11 @@ write_files:
                 retry_join:
                   - "${consul}"
         post_tasks:
+          - name: Clean artifact path
+            file:
+              state: absent
+              path: /tmp/grafana-tmp-dashboard
+
           - name: create dashboard-repo folder
             file:
               path: /tmp/grafana-tmp-dashboard
@@ -118,7 +123,24 @@ write_files:
               paths: /tmp/grafana-tmp-dashboard
               patterns: "*.json"
             register: dashboard_list
-      
+           
+          - name: Set dashboard datasource to prometheus
+            replace:
+              path: "{{ item.path }}"
+              regexp: '"(?:\$${)?DS_[A-Z0-9_-]+(?:})?"'
+              replace: '"prometheus"'
+            delegate_to: localhost
+            with_items: "{{ dashboard_list.files }}"
+
+          - name: delete dashboard befor import
+            grafana_dashboard:
+              grafana_url: http://localhost:3000
+              slug: "{{ item.path.split('/')[-1].replace('.json','')  }}"
+              state: absent
+              message: Updated by ansible
+              path: "{{ item.path }}"
+            with_items: "{{ dashboard_list.files }}"
+            
           - name: Import Grafana dashboard
             grafana_dashboard:
               grafana_url: http://localhost:3000
