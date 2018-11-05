@@ -17,7 +17,7 @@ module "orchestrator" {
   network_name = "${var.network_name}"
   keypair = "${var.keypair_name}"
   sec_group = ["${module.internal.sg_id}"]
-  image = "ecs-orchestrator 1.1.1"
+  image = "ecs-orchestrator 1.1.2"
   orchestrator_password = "supersecretorchestrator"
   orchestrator_http_auth_password = "supersecretorchestrator"
   orchestrator_raft_nodes = "[ 'orchestrator-0.node.automium.consul', 'orchestrator-1.node.automium.consul', 'orchestrator-2.node.automium.consul' ]"
@@ -33,7 +33,7 @@ module "mysql-orchestrator" {
   keypair = "${var.keypair_name}"
   sec_group = ["${module.pluto-internal.sg_id}","${module.enter_1.sg_id}","${module.enter_2.sg_id}"]
   name = "mysql-orchestrator"
-  image = "ecs-mysql 1.0.9"
+  image = "ecs-mysql 1.1.1"
   flavor = "e3standard.x4"
   mysql_admin_password = "supersecretadmin"
   mysql_replica_user_password = "supersecretreplica"

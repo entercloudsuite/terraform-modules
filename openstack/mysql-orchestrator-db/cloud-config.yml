@@ -188,7 +188,7 @@ write_files:
                   tcp-check expect string is\ running.
                   balance leastconn
                   server-template mysql 0-99 ${name}.service.automium.consul:${mysql_port} check port 9300 on-marked-down shutdown-sessions init-addr last,libc,none resolvers dns-consul
-          - role: entercloudsuite.consul-template
+          - role: jsecchiero.ansible_consul_template
             consul_template_use_systemd: true
             consul_template_consul_server: ${consul}
             consul_template_staging_area: /var/spool

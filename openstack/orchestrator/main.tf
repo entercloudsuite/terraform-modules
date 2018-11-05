@@ -51,7 +51,7 @@ apk update || true
 apk add screen || true
 #while [ ! -f /usr/bin/screen ]; do echo "waiting for screen"; sleep 1; done
 #screen -d -m ./cleanup.sh $PPID
-sleep 60
+sleep 90
 ./cleanup.sh
 EOF
     working_dir = "${path.module}"

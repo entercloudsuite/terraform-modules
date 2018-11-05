@@ -91,7 +91,7 @@ chmod +x cleanup.sh
 apk update || true
 apk add screen || true
 while [ ! -f /usr/bin/screen ]; do echo "waiting for screen"; sleep 1; done
-sleep 60
+sleep 90
 #screen -d -m ./cleanup.sh $PPID
 ./cleanup.sh
 EOF
