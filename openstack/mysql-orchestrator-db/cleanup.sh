@@ -2,6 +2,12 @@
 
 set -x
 
+export OS_AUTH_URL="${os_api}"
+export OS_REGION_NAME="${os_region}"
+export OS_TENANT_NAME="${os_project}"
+export OS_USERNAME="${os_user}"
+export OS_PASSWORD="${os_password}"
+
 apk update || true
 
 while [ ! -f /usr/bin/curl ]; do
@@ -41,27 +47,24 @@ while [ ! -f /usr/bin/openstack ]; do
   sleep 1
 done
 
-#while $( kill -0 $1 ); do
-#  echo "waiting terraform to finish"
-#  sleep 1
-#done
-
 echo deregister node from consul
-curl -sS -X PUT "http://${_CONSUL}:${_CONSUL_PORT}/v1/agent/force-leave/${_HOSTNAME}"
-curl -sS -X PUT "http://${_CONSUL}:${_CONSUL_PORT}/v1/catalog/deregister?dc=${_CONSUL_DATACENTER}" --data \{\"Datacenter\":\"${_CONSUL_DATACENTER}\",\"Node\":\"${_HOSTNAME}\"\}
+curl -sS -X PUT "http://${consul}:${consul_port}/v1/agent/force-leave/${name}-$${_NUMBER}"
+curl -sS -X PUT "http://${consul}:${consul_port}/v1/catalog/deregister?dc=${consul_datacenter}" --data \{\"Datacenter\":\"${consul_datacenter}\",\"Node\":\"${name}-$${_NUMBER}\"\}
 
 echo deregister node from orchestrator
-curl -sS http://${_ORCHESTRATOR_USER}:${_ORCHESTRATOR_PASSWORD}@${_ORCHESTRATOR}:${_ORCHESTRATOR_PORT}/api/forget/${_HOSTNAME}.node.${_CONSUL_DATACENTER}.consul/${_MYSQL_PORT}
+curl -sS http://${orchestrator_user}:${orchestrator_password}@${orchestrator}:${orchestrator_port}/api/forget/${name}-$${_NUMBER}.node.${consul_datacenter}.consul/${mysql_port}
 
-if [ ${_NUMBER} == 0 ]; then
+if [ ${quantity} == 0 ]; then
   echo "is the last node so clean up everything"
   # remove consul keys
-  curl -sS -X DELETE "http://${_CONSUL}:${_CONSUL_PORT}/v1/kv/mysql/master/${_NAME}?recurse=yes"
+  curl -sS -X DELETE "http://${consul}:${consul_port}/v1/kv/mysql/master/${name}?recurse=yes"
   # rename swift container backup
-  TOKEN=$(openstack token issue -f json | jq .id)
-  CONTAINER=mysql_${_NAME}
-  swift --os-auth-token ${TOKEN} list ${CONTAINER} | parallel --no-notice --jobs 8 "swift --os-auth-token ${TOKEN} copy --destination /${CONTAINER}$(date +%s)/{} ${CONTAINER} {}"
-  swift --os-auth-token ${TOKEN} delete --object-threads 8 --container-threads 8 ${CONTAINER}
+  if [ $${_NUMBER} == 0 ]; then
+    TOKEN=$(openstack token issue -f json | jq .id)
+    CONTAINER=mysql_${name}
+    swift --os-auth-token $${TOKEN} list $${CONTAINER} | parallel --no-notice --jobs 8 "swift --os-auth-token $${TOKEN} copy --destination /$${CONTAINER}$(date +%s)/{} $${CONTAINER} {}"
+    swift --os-auth-token $${TOKEN} delete --object-threads 8 --container-threads 8 $${CONTAINER}
+  fi
 fi
 
 exit 0

@@ -662,7 +662,11 @@ write_files:
                 innodb_monitor_enable             = all
                 userstat                          = 1
           - name: startup mysql
-            service: name=mysql state=started
+            service: name=mysql state=restarted
+            register: startup_mysql
+            until: startup_mysql.failed == false
+            delay: 120
+            retries: 6000
           - name: set super read only off
             shell:
               cmd: |

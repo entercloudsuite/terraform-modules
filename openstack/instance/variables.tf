@@ -66,3 +66,7 @@ variable "userdata" {
 variable "discovery_port" {
   default = 0
 }
+
+variable "postdestroy" {
+  default = "true"
+}

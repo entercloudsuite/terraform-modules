@@ -79,6 +79,7 @@ resource "openstack_compute_instance_v2" "cluster" {
 
   metadata = "${var.tags}"
   user_data = "${element(var.userdata,count.index)}"
+  depends_on = ["null_resource.postdestroy"]
 }
 
 resource "consul_catalog_entry" "service_local" {
@@ -106,5 +107,16 @@ resource "consul_catalog_entry" "service_external" {
     name    = "external${var.name}"
     port    = "${var.discovery_port}"
     tags    = ["${count.index}"]
+  }
+}
+
+resource "null_resource" "postdestroy" {
+  count = "${var.quantity}"
+  provisioner "local-exec" {
+    when = "destroy"
+    command = "${var.postdestroy}"
+    environment {
+      _NUMBER = "${count.index}"
+    }
   }
 }
