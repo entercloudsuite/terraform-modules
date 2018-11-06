@@ -1,0 +1,175 @@
+#cloud-config
+
+write_files:
+  - content: |
+      - name: install Prometheus Server
+        hosts: 127.0.0.1
+        pre_tasks:
+           - name: stop consul
+             service: name=consul state=stopped
+           - name: clean /opt/consul/data/serf/local.keyring
+             file: path=/opt/consul/data/serf/local.keyring state=absent
+           - name: create prometheus prometehus conf main
+             copy:
+               content: | 
+                 ${prometheus_prometheus_conf_main}
+               dest: /usr/src/cloud/prometheus.yml
+           - name: create prometheus alertmanager conf
+             copy:
+               content: |
+                 ${prometheus_alertmanager_conf_main}
+               dest: "/usr/src/cloud/alertmanager.yml"
+           - name: create prometheus expoter main conf
+             copy:
+               content: | 
+                 ${prometheus_blackbox_exporter_main_conf}
+               dest: "/usr/src/cloud/config_blackbox_exporter.yaml"
+           - name: create Prometheus Rules
+             copy:
+               content: |
+                 ${prometheus_rules}
+               dest: "/usr/src/cloud/prometheus_rules.rules"
+           - name: configure grafana repo
+             set_fact:
+               grafna_dashboard_repo: ${grafna_dashboard_repo}
+        roles:
+          - role: ansible-prometheus
+            prometheus_conf_main: "prometheus.yml"
+            prometheus_alertmanager_conf: "alertmanager.yml"
+            prometheus_rule_files:
+              basic_rules:
+                src:  "prometheus_rules.rules"
+                dest: prometheus_rules.rules
+          - role: entercloudsuite.prometheus-exporter
+            prometheus_exporter_name: blackbox_exporter
+            prometheus_exporter_version: 0.12.0
+            prometheus_exporter_conf_main: "config_blackbox_exporter.yaml"
+            prometheus_rule_git_repo: "${prometheus_rule_git_repo}"
+            prometheus_exporter_config_flags:
+            "--config.file": "{{ prometheus_exporter_custom_conf_destination }}/config_blackbox_exporter.yaml"
+          - role: cloudalchemy.grafana
+            grafana_security: { admin_user: admin, admin_password: "admin" }
+            grafana_datasources:
+              - name: prometheus
+                type: prometheus
+                access: proxy
+                url: 'http://localhost:9090'
+                basicAuth: false
+          - role: entercloudsuite.consul
+            consul_config_validate: "{{ consul_user_home }}/bin/consul validate -config-format=json %s"
+            consul_configs:
+              main:
+                bind_addr: 0.0.0.0
+                client_addr: 0.0.0.0
+                node_name: "{{ ansible_hostname }}"
+                data_dir: "{{ consul_data_dir }}"
+                encrypt: "${consul_encrypt}"
+                datacenter: "${consul_datacenter}"
+                enable_syslog: true
+                server: false
+                ui: true
+                enable_script_checks: true
+                services:
+                  - name: "${name}"
+                    checks:
+                      - http: "http://localhost@127.0.0.1:9090"
+                        method: "GET"
+                        interval: "2s"
+                  - name: "exporter_node"
+                    port: 9100
+                  - name: "metrics"
+                    port: 9090
+                    checks:
+                      - http: "http://127.0.0.1:9090"
+                        method: "GET"
+                        interval: "2s"
+                  - name: "exporter_prometheus"
+                    port: 9090
+                  - name: "blackbox_expoter"
+                    port: 9115
+                  - name: "monitor"
+                    port: 9093
+                    checks:
+                      - http: "http://127.0.0.1:9093"
+                        method: "GET"
+                        interval: "2s"
+                  - name: "graph"
+                    port: 3000
+                    checks:
+                      - http: "http://127.0.0.1:3000"
+                        method: "GET"
+                        interval: "2s"
+                rejoin_after_leave: true
+                retry_join:
+                  - "${consul}"
+        post_tasks:
+          - name: Clean artifact path
+            file:
+              state: absent
+              path: /tmp/grafana-tmp-dashboard
+
+          - name: create dashboard-repo folder
+            file:
+              path: /tmp/grafana-tmp-dashboard
+              state: directory
+
+          - name: get grafana dashboard from {{grafna_dashboard_repo}}""
+            git:
+              repo: "{{ grafna_dashboard_repo }}"
+              dest: /tmp/grafana-tmp-dashboard
+
+          - name: get list of dashboard
+            find:
+              paths: /tmp/grafana-tmp-dashboard
+              patterns: "*.json"
+            register: dashboard_list
+           
+          - name: Set dashboard datasource to prometheus
+            replace:
+              path: "{{ item.path }}"
+              regexp: '"(?:\$${)?DS_[A-Z0-9_-]+(?:})?"'
+              replace: '"prometheus"'
+            delegate_to: localhost
+            with_items: "{{ dashboard_list.files }}"
+
+          - name: delete dashboard befor import
+            grafana_dashboard:
+              grafana_url: http://localhost:3000
+              slug: "{{ item.path.split('/')[-1].replace('.json','')  }}"
+              state: absent
+              message: Updated by ansible
+              path: "{{ item.path }}"
+            with_items: "{{ dashboard_list.files }}"
+            
+          - name: Import Grafana dashboard
+            grafana_dashboard:
+              grafana_url: http://localhost:3000
+              slug: "{{ item.path.split('/')[-1].replace('.json','')  }}"
+              state: present
+              message: Updated by ansible
+              path: "{{ item.path }}"
+            with_items: "{{ dashboard_list.files }}"
+
+    path: /usr/src/cloud/playbook.yml
+    permissions: '0400'
+
+runcmd:
+  - |
+      bash <<'EOF'
+      export COMPLETED=false
+      while [ "$COMPLETED" == "false" ]; do
+        (
+          set -e errexit
+          set -o pipefail
+          # workaround https://github.com/ansible/ansible/issues/21562
+          export HOME=/root
+          cd /usr/src/cloud
+          source venv/bin/activate
+          ansible-playbook -e ansible_python_interpreter=/usr/bin/python --connection=local playbook.yml
+        ) >> /var/log/cloud-scripts.log 2>&1
+        if [ $? == 0 ]; then
+          COMPLETED=true
+        fi
+        sleep 1
+      done
+      EOF
