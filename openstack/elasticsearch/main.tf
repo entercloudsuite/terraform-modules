@@ -32,4 +32,17 @@ module "elasticsearch" {
   sec_group = ["${module.elasticsearch_internal_sg.sg_id}"]
   keypair = "${var.keyname}"
   tags = "${var.tags}"
+  postdestroy = "${data.template_file.cleanup.rendered}"
+}
+
+data "template_file" "cleanup" {
+  template = "${file("${path.module}/cleanup.sh")}"
+  vars {
+    name = "${var.name}"
+    quantity = "${var.quantity}"
+    consul = "${var.consul}"
+    consul_port = "${var.consul_port}"
+    consul_datacenter = "${var.consul_datacenter}"
+    consul_encrypt = "${var.consul_encrypt}"
+  }
 }

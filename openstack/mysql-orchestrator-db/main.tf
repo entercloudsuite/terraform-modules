@@ -1,5 +1,5 @@
 module "mysql" {
-  source = "github.com/entercloudsuite/terraform-modules//openstack/instance?ref=postdeploy"
+  source = "github.com/entercloudsuite/terraform-modules//openstack/instance?ref=2.7"
   name = "${var.name}"
   image = "${var.image}"
   quantity = "${var.quantity}"

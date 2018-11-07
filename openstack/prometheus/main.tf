@@ -10,6 +10,7 @@ module "prometheus" {
   discovery = "${var.discovery}"
   keypair = "${var.keypair}"
   userdata = "${data.template_file.cloud-config.*.rendered}"
+  postdestroy = "${data.template_file.cleanup.rendered}"
   image = "${var.image}"
   tags = {
     "server_group" = "${var.name}"
@@ -28,6 +29,18 @@ data "template_file" "cloud-config" {
     prometheus_rules = "${indent(17,var.prometheus_rules)}"
     prometheus_rule_git_repo = "${var.prometheus_rule_git_repo}"
     grafna_dashboard_repo = "${var.grafna_dashboard_repo}"
+    consul = "${var.consul}"
+    consul_port = "${var.consul_port}"
+    consul_datacenter = "${var.consul_datacenter}"
+    consul_encrypt = "${var.consul_encrypt}"
+  }
+}
+
+data "template_file" "cleanup" {
+  template = "${file("${path.module}/cleanup.sh")}"
+  vars {
+    name = "${var.name}"
+    quantity = "${var.quantity}"
     consul = "${var.consul}"
     consul_port = "${var.consul_port}"
     consul_datacenter = "${var.consul_datacenter}"

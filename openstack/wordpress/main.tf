@@ -15,6 +15,7 @@ module "wordpress" {
   discovery = "${var.discovery}"
   external = "${var.external}"
   region = "${var.region}"
+  postdestroy = "${data.template_file.cleanup.rendered}"
 }
 
 data "template_file" "cloud-config" {
@@ -24,6 +25,18 @@ data "template_file" "cloud-config" {
     db_user = "${var.db_user}"
     db_password = "${var.db_password}"
     db_host = "${var.db_host}"
+    consul = "${var.consul}"
+    consul_port = "${var.consul_port}"
+    consul_datacenter = "${var.consul_datacenter}"
+    consul_encrypt = "${var.consul_encrypt}"
+  }
+}
+
+data "template_file" "cleanup" {
+  template = "${file("${path.module}/cleanup.sh")}"
+  vars {
+    name = "${var.name}"
+    quantity = "${var.quantity}"
     consul = "${var.consul}"
     consul_port = "${var.consul_port}"
     consul_datacenter = "${var.consul_datacenter}"

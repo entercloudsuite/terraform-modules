@@ -1,5 +1,5 @@
 module "orchestrator" {
-  source = "github.com/entercloudsuite/terraform-modules//openstack/instance?ref=postdeploy"
+  source = "github.com/entercloudsuite/terraform-modules//openstack/instance?ref=2.7"
   name = "${var.name}"
   image = "${var.image}"
   quantity = "${var.quantity}"
@@ -11,7 +11,7 @@ module "orchestrator" {
   discovery = "${var.discovery}"
   keypair = "${var.keypair}"
   userdata = "${data.template_file.cloud-config.*.rendered}"
-  postdestroy = "${data.template_file.cleanup.*.rendered}"
+  postdestroy = "${data.template_file.cleanup.rendered}"
   tags = {
     "server_group" = "${var.name}"
   }
@@ -45,11 +45,9 @@ data "template_file" "cloud-config" {
 
 data "template_file" "cleanup" {
   template = "${file("${path.module}/cleanup.sh")}"
-  count = "${var.quantity}"
   vars {
     name = "${var.name}"
-    number = "${count.index}"
-    hostname = "${var.name}-${count.index}"
+    quantity = "${var.quantity}"
     orchestrator_port = "${var.orchestrator_port}" 
     orchestrator_service_port = "${var.orchestrator_service_port}" 
     orchestrator_user = "${var.orchestrator_user}" 
