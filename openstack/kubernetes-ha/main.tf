@@ -55,6 +55,7 @@ module "kubernetes-all-from-internal_sg" {
 data "template_file" "cloud-config-master" {
   template = "${file("${path.module}/kube-master.yml")}"
   vars {
+    name = "${var.master_name}"
     public-ip  = "${module.kubernetes_master.public-instance-address[0]}"
     kube-token = "${format("%s.%s", random_string.kube-first-token-part.result, random_string.kube-second-token-part.result)}"
     os_api_url = "${var.cloud_os_api_url}"
@@ -66,6 +67,11 @@ data "template_file" "cloud-config-master" {
     service-network-cidr = "${var.service-network-cidr}"
     dns-service-addr = "${cidrhost(var.service-network-cidr, 10)}"
     etcd = "${var.etcd}"
+    master_count = "${var.master_count}"
+    consul = "${var.consul}"
+    consul_port = "${var.consul_port}"
+    consul_datacenter = "${var.consul_datacenter}"
+    consul_encrypt = "${var.consul_encrypt}"
   }
 }
 
@@ -86,10 +92,10 @@ data "template_file" "cloud-config-worker" {
 # Kubernetes master node
 module "kubernetes_master" {
   source = "github.com/entercloudsuite/terraform-modules//instance?ref=2.6"
-  name = "kubernetes-master"
+  name = "${var.master_name}"
   region = "${var.region}"
   image = "${var.image}"
-  quantity = 1
+  quantity = "${var.master_count}"
   external = "true"
   discovery = "true"
   flavor = "${var.master_flavor}"

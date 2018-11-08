@@ -1,8 +1,16 @@
+variable "master_name" {
+  default = "kubernetes-master"
+}
+
 variable "region" {
   default = "it-mil1"
 }
 
-variable "worker_count" { 
+variable "master_count" {
+   default = "1"
+}
+
+variable "worker_count" {
    default = "2"
 }
 
@@ -59,4 +67,18 @@ variable "custom_secgroups_workers" {
 }
 
 variable "etcd" {
+}
+
+variable "consul" {
+  default = ""
+}
+
+variable "consul_port" {
+  default = "8500"
+}
+
+variable "consul_datacenter" {
+}
+
+variable "consul_encrypt" {
 }

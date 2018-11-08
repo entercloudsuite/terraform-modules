@@ -480,6 +480,8 @@ write_files:
       tokenTTL: 0s
       apiServerCertSANs:
       - ${public-ip}
+      apiServerExtraArgs:
+        apiserver-count: "${master_count}"
     path: /root/kubeadm-config.yml
     permissions: '0600'
 
@@ -509,9 +511,204 @@ write_files:
     path: /root/bootstrap.sh
     permissions: '0755'
     
+  - content: |
+      - name: bootstrap phase
+        hosts: 127.0.0.1
+        tasks:
+          - name: bootstrap phase - create consul session
+            uri:
+              url: http://${consul}:${consul_port}/v1/session/create
+              method: PUT
+              status_code: 200
+              body_format: json
+            register: bootstrap_session_consul
+            until: bootstrap_session_consul.failed == false
+            delay: 1
+            retries: 6000
+          - set_fact:
+              bootstrap_session: "{{ bootstrap_session_consul.json | json_query('ID') }}" 
+          - name: bootstrap phase - aquire consul lock
+            uri:
+              url: "http://${consul}:${consul_port}/v1/kv/kubernetes/master/${name}/custom_bootstrap?acquire={{ bootstrap_session }}"
+              method: PUT
+              status_code: 200
+              body: '{ name: $${hostname}.node.${consul_datacenter}.consul }'
+            register: bootstrap_consul
+            until: bootstrap_consul.failed == false
+            delay: 1
+            retries: 6000
+          - set_fact:
+              bootstrap: "{{ bootstrap_consul.json | bool }}" 
+
+      - name: bootstrap one master node
+        hosts: 127.0.0.1
+        tasks:
+          - name: bootstrap kubernetes
+            shell: bash /root/bootstrap.sh
+            register: bootstrap_kubernetes
+            until: bootstrap_kubernetes.rc == 0
+            delay: 1
+            retries: 6000
+            when: bootstrap == true
+
+      - name: spread kubeconfig
+        hosts: 127.0.0.1
+        tasks:
+          - block:
+              - name: encrypt config
+                shell: 'cat ~/.kube/config | sed "s/    server:.*$ /    server: https:\/\/${name}.service.${consul_datacenter}.consul:6443/g" | openssl enc -e -base64 -A -aes-128-ctr -nopad -nosalt -k ${kube-token}'
+                register: kube_config_encrypt
+              - name: save encyrpted kube config
+                uri:
+                  url: "http://10.2.0.61:8500/v1/kv/kubernetes/master/kubernetes-master/kube_conf"
+                  method: PUT
+                  status_code: 200
+                  body: "{{ kube_config_encrypt.stdout }}"
+                register: kube_config_consul
+                until: kube_config_consul.failed == false
+                delay: 1
+                retries: 6000
+            when: bootstrap == true
+          - name: get encrypted kube config
+            uri:
+              url: "http://10.2.0.61:8500/v1/kv/kubernetes/master/kubernetes-master/kube_conf"
+              method: GET
+              status_code: 200
+              body_format: json
+            register: kube_config_encrypt
+            until: kube_config_encrypt.failed == false
+            delay: 1
+            retries: 6000
+          - name: create directory .kube
+            file: path=/root/.kube state=directory
+          - name: decrypt kube_config
+            shell: 'echo -n {{ kube_config_encrypt.json[0].Value | b64decode }} | openssl enc -d -base64 -A -aes-128-ctr -nopad -nosalt -k ${kube-token} > /root/.kube/config_cloud'
+
+      - name: generate and spread ssh keys
+        hosts: 127.0.0.1
+        tasks:
+          - block:
+              - name: generate ssh keys
+                shell: ssh-keygen -b 2048 -t rsa -f /tmp/id_rsa -q -N "" -P ${kube-token}
+                args:
+                  creates: /tmp/id_rsa
+              - name: put private ssh key
+                uri:
+                  url: "http://${consul}:${consul_port}/v1/kv/kubernetes/master/${name}/custom_ssh_key"
+                  method: PUT
+                  status_code: 200
+                  body: "{{ lookup('file', '/tmp/id_rsa') }}"
+                register: ssh_key_consul
+                until: ssh_key_consul.failed == false
+                delay: 1
+                retries: 6000
+              - name: put public ssh key
+                uri:
+                  url: "http://${consul}:${consul_port}/v1/kv/kubernetes/master/${name}/custom_ssh_key_pub"
+                  method: PUT
+                  status_code: 200
+                  body: "{{ lookup('file', '/tmp/id_rsa.pub') }}"
+                register: ssh_key_pub_consul
+                until: ssh_key_pub_consul.failed == false
+                delay: 1
+                retries: 6000
+              - name: remove keys from temp dir
+                file:
+                  path: "{{ item }}"
+                  state: absent
+                with_items:
+                  - /tmp/id_rsa
+                  - /tmp/id_rsa.pub
+            when: bootstrap == true
+          - name: get private ssh key
+            uri:
+              url: http://${consul}:${consul_port}/v1/kv/kubernetes/master/${name}/custom_ssh_key
+              method: GET
+              status_code: 200
+              body_format: json
+            register: ssh_key_consul
+            until: ssh_key_consul.failed == false
+            delay: 1
+            retries: 6000
+          - name: write private encrypted ssh key
+            copy:
+              content: "{{ ssh_key_consul.json[0] | json_query('Value') | b64decode }}"
+              dest: /root/.ssh/id_rsa.enc
+              mode: 0400
+          - name: decrypt ssh keys
+            shell: openssl rsa -in /root/.ssh/id_rsa.enc -out /root/.ssh/id_rsa -passin pass:${kube-token} && chmod 400 /root/.ssh/id_rsa
+            args:
+              creates: /root/.ssh/id_rsa
+          - name: get public ssh key
+            uri:
+              url: http://${consul}:${consul_port}/v1/kv/kubernetes/master/${name}/custom_ssh_key_pub
+              method: GET
+              status_code: 200
+              body_format: json
+            register: ssh_key_pub_consul
+            until: ssh_key_pub_consul.failed == false
+            delay: 1
+            retries: 6000
+          - name: write public ssh key
+            copy:
+              content: "{{ ssh_key_pub_consul.json[0] | json_query('Value') | b64decode }}"
+              dest: /root/.ssh/id_rsa.pub
+              mode: 0400
+          - name: enable ssh key for direct root access
+            authorized_key:
+              user: root
+              key: "{{ lookup('file', '/root/.ssh/id_rsa.pub') }}"
+
+      - name: kubernetes certificates and init
+        hosts: 127.0.0.1
+        tasks:
+          - block:
+            - name: get a master and ready node
+              shell: kubectl get nodes --insecure-skip-tls-verify --kubeconfig=/root/.kube/config_cloud | grep master | grep ' Ready' | cut -f1 -d ' ' | head -n1
+              register: master_node
+              until: ( master_node.failed == false ) and
+                ( master_node.stdout != "" )
+              delay: 1
+              retries: 6000
+            - name: copy certificates from master node
+              shell: scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r {{ master_node.stdout }}.node.${consul_datacenter}.consul:/etc/kubernetes/pki /etc/kubernetes/
+            - name: clean apiserver cert
+              shell: rm /etc/kubernetes/pki/apiserver.*
+            - name: bootstrap kubernetes
+              shell: bash /root/bootstrap.sh
+              register: bootstrap_kubernetes
+              until: bootstrap_kubernetes.rc == 0
+              delay: 1
+              retries: 6000
+            when: bootstrap == false
+    path: /usr/src/cloud/playbook.yml
+    permissions: '0755'
+
 runcmd:
-  - bash /root/bootstrap.sh
-  - rm /root/bootstrap.sh /root/kubeadm-config.yml /root/network.yaml
+  #- bash /root/bootstrap.sh
+  #- rm /root/bootstrap.sh /root/kubeadm-config.yml /root/network.yaml
+  - |
+      bash <<'EOF'
+      export COMPLETED=false
+      while [ "$COMPLETED" == "false" ]; do
+        (
+          apt-get update || true
+          apt-get install python-pip -y || true
+          set -e errexit
+          set -o pipefail
+          # workaround https://github.com/ansible/ansible/issues/21562
+          export HOME=/root
+          cd /usr/src/cloud
+          #source venv/bin/activate
+          pip install ansible==2.6.2
+          pip install jmespath==0.9.3
+          ansible-playbook -e ansible_python_interpreter=/usr/bin/python --connection=local playbook.yml
+        ) >> /var/log/cloud-scripts.log 2>&1
+        if [ $? == 0 ]; then
+          COMPLETED=true
+        fi
+        sleep 1
+      done
+      EOF
 
 final_message: "Kubernetes master is ready to use"
-
