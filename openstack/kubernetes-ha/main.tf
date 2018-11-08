@@ -65,6 +65,7 @@ data "template_file" "cloud-config-master" {
     pod-network-cidr = "${var.pod-network-cidr}"
     service-network-cidr = "${var.service-network-cidr}"
     dns-service-addr = "${cidrhost(var.service-network-cidr, 10)}"
+    etcd = "${var.etcd}"
   }
 }
 

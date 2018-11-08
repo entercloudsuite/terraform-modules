@@ -450,9 +450,9 @@ write_files:
         advertiseAddress: ens3
       etcd:
         endpoints:
-        - http://etcd-server-0.node.automium.consul:2379
-        - http://etcd-server-1.node.automium.consul:2379
-        - http://etcd-server-2.node.automium.consul:2379
+        - http://${etcd}-0.node.automium.consul:2379
+        - http://${etcd}-1.node.automium.consul:2379
+        - http://${etcd}-2.node.automium.consul:2379
       networking:
         dnsDomain: cluster.local
         serviceSubnet: ${service-network-cidr}

@@ -57,3 +57,6 @@ variable "custom_secgroups_master" {
 variable "custom_secgroups_workers" {
    default = []
 }
+
+variable "etcd" {
+}
