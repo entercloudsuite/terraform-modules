@@ -68,6 +68,7 @@ module "mysql-volume" {
   size = "${var.mysql_volume_size}"
   instance = "${module.mysql.instance}"
   quantity = "${module.mysql.quantity}"
+  region = "${var.region}"
   volume_type = "${var.mysql_volume_type}"
 }
 
