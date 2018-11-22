@@ -56,7 +56,7 @@ data "template_file" "cloud-config-master" {
   template = "${file("${path.module}/kube-master.yml")}"
   vars {
     name = "${var.master_name}"
-    public-ip  = "${module.kubernetes_master.public-instance-address[0]}"
+    public-ip  = "${element(module.kubernetes_master.public-instance-address,0)}"
     kube-token = "${format("%s.%s", random_string.kube-first-token-part.result, random_string.kube-second-token-part.result)}"
     os_api_url = "${var.cloud_os_api_url}"
     os_tenant_name = "${var.cloud_os_tenant_name}"
@@ -78,7 +78,7 @@ data "template_file" "cloud-config-master" {
 data "template_file" "cloud-config-worker" {
   template = "${file("${path.module}/kube-worker.yml")}"
   vars {
-    master-ip  = "${module.kubernetes_master.instance-address[0]}"
+    master-ip  = "${element(module.kubernetes_master.instance-address,0)}"
     kube-token = "${format("%s.%s", random_string.kube-first-token-part.result, random_string.kube-second-token-part.result)}"
     os_api_url = "${var.cloud_os_api_url}"
     os_tenant_name = "${var.cloud_os_tenant_name}"
@@ -103,6 +103,7 @@ module "kubernetes_master" {
   sec_group = "${concat(var.custom_secgroups_master, list("${module.kubernetes-ssh_sg.sg_id}","${module.kubernetes-api_sg.sg_id}","${module.kubernetes-all-from-internal_sg.sg_id}"))}"
   keypair = "${var.keyname}"
   userdata = "${data.template_file.cloud-config-master.rendered}"
+  allowed_address_pairs = "0.0.0.0/0"
   tags = {
     "server_group" = "KUBERNETES"
   }
@@ -122,6 +123,7 @@ module "kubernetes_workers" {
   sec_group = "${concat(var.custom_secgroups_workers, list("${module.kubernetes-all-from-internal_sg.sg_id}"))}"
   keypair = "${var.keyname}"
   userdata = "${data.template_file.cloud-config-worker.rendered}"
+  allowed_address_pairs = "0.0.0.0/0"
   tags = {
     "server_group" = "KUBERNETES"
   }
