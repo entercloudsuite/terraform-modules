@@ -697,6 +697,12 @@ write_files:
                   host: '%'
                   password: ${mysql_admin_password}
                   priv: '*.*:ALL,GRANT'
+              - name: create mysql prometheus user
+                mysql_user:
+                  name: prometheus
+                  host: 'localhost'
+                  password: prometheus
+                  priv: '*.*:GRANT PROCESS,REPLICATION CLIENT,SELECT'
               - name: create mysql backup user
                 mysql_user:
                   name: backup
