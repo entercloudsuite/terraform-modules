@@ -18,12 +18,13 @@ done
 
 while [ ! -f /usr/bin/pip ]; do
   echo "waiting for pip"
-  apk add py-pip || true
+  apk add --update py-pip || true
   sleep 1
 done
 
 until pip freeze | grep python-swiftclient==3.6.0; do
   echo "waiting for swift"
+  pip install --upgrade pip || true
   pip install python-swiftclient==3.6.0 || true
   sleep 1
 done
@@ -43,7 +44,8 @@ done
 while [ ! -f /usr/bin/openstack ]; do
   echo "waiting for openstack"
   apk add gcc python-dev musl-dev linux-headers libffi-dev openssl-dev
-  pip install python-openstackclient==3.15.0 || true
+  pip install --upgrade pip || true
+  pip install python-openstackclient==3.17.0 || true
   sleep 1
 done
 
