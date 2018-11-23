@@ -142,7 +142,7 @@ write_files:
                 listen write-pool
                     bind *:3306
                     mode tcp
-                    server {{key "mysql/master/${name}/hostname"}} {{key "mysql/master/${name}/ipv4"}}:{{key "mysql/master/${name}/port"}} check port {{key "mysql/master/${name}/port"}} init-addr last,libc,none
+                    server {{key "mysql/master/${name}/hostname"}} {{key "mysql/master/${name}/ipv4"}}:{{key "mysql/master/${name}/port"}} check port {{key "mysql/master/${name}/port"}} init-addr none
                 {% endraw %}
               dest: master.ctmpl
           - name: stop consul
@@ -187,7 +187,7 @@ write_files:
                   option tcp-check
                   tcp-check expect string is\ running.
                   balance leastconn
-                  server-template mysql 0-99 ${name}.service.automium.consul:${mysql_port} check port 9300 on-marked-down shutdown-sessions init-addr last,libc,none resolvers dns-consul
+                  server-template mysql 0-99 ${name}.service.automium.consul:${mysql_port} check port 9300 on-marked-down shutdown-sessions init-addr none resolvers dns-consul
           - role: jsecchiero.ansible_consul_template
             consul_template_use_systemd: true
             consul_template_consul_server: ${consul}
@@ -702,7 +702,7 @@ write_files:
                   name: prometheus
                   host: 'localhost'
                   password: prometheus
-                  priv: '*.*:GRANT PROCESS,REPLICATION CLIENT,SELECT'
+                  priv: '*.*:PROCESS,REPLICATION CLIENT,SELECT'
               - name: create mysql backup user
                 mysql_user:
                   name: backup
