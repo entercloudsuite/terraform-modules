@@ -2,6 +2,10 @@ variable "master_name" {
   default = "kubernetes-master"
 }
 
+variable "worker_name" {
+  default = "kubernetes-workers"
+}
+
 variable "region" {
   default = "it-mil1"
 }
