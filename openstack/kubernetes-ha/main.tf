@@ -57,6 +57,8 @@ data "template_file" "cloud-config-master" {
   count = "${var.master_count}"
   vars {
     name = "${var.master_name}"
+    number = "${count.index}"
+    hostname = "${var.name}-${count.index}"
     public-ip  = "${element(module.kubernetes_master.public-instance-address,0)}"
     kube-token = "${format("%s.%s", random_string.kube-first-token-part.result, random_string.kube-second-token-part.result)}"
     os_api_url = "${var.cloud_os_api_url}"

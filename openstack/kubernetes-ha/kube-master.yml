@@ -532,7 +532,7 @@ write_files:
               url: "http://${consul}:${consul_port}/v1/kv/kubernetes/master/${name}/custom_bootstrap?acquire={{ bootstrap_session }}"
               method: PUT
               status_code: 200
-              body: "{ name: $${hostname}.node.${consul_datacenter}.consul }"
+              body: "{ name: ${hostname}.node.${consul_datacenter}.consul }"
             register: bootstrap_consul
             until: bootstrap_consul.failed == false
             delay: 1
