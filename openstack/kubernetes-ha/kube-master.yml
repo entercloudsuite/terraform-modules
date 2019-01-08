@@ -434,7 +434,6 @@ write_files:
        Environment="KUBELET_NETWORK_ARGS=--network-plugin=cni --cni-conf-dir=/etc/cni/net.d --cni-bin-dir=/opt/cni/bin"
        Environment="KUBELET_DNS_ARGS=--cluster-dns=${dns-service-addr} --cluster-domain=cluster.local"
        Environment="KUBELET_AUTHZ_ARGS=--authorization-mode=Webhook --client-ca-file=/etc/kubernetes/pki/ca.crt"
-       Environment="KUBELET_CADVISOR_ARGS=--cadvisor-port=0"
        Environment="KUBELET_CERTIFICATE_ARGS=--rotate-certificates=true --cert-dir=/var/lib/kubelet/pki"
        Environment="KUBELET_CLOUD_ARGS=--cloud-provider=openstack --cloud-config=/etc/kubernetes/openstack/cloud.conf"
        ExecStart=
@@ -482,7 +481,64 @@ write_files:
       - ${public-ip}
       apiServerExtraArgs:
         apiserver-count: "${master_count}"
-    path: /root/kubeadm-config.yml
+    path: /root/kubeadm-1.10-config.yml
+    permissions: '0600'
+
+  - content: |
+      apiVersion: kubeadm.k8s.io/v1beta1
+      kind: InitConfiguration
+      bootstrapTokens:
+        - token: ${kube-token}
+          description: "kubernetes bootstrap token"
+          ttl: "0"
+      nodeRegistration:
+        name: "${hostname}"
+      localAPIEndpoint:
+        advertiseAddress: "$PRIVATE_IP"
+        bindPort: 6443
+      ---
+      apiVersion: kubeadm.k8s.io/v1beta1
+      kind: ClusterConfiguration
+      kubernetesVersion: $VERSION
+      networking:
+        dnsDomain: cluster.local
+        serviceSubnet: ${service-network-cidr}
+        podSubnet: ${pod-network-cidr}
+      etcd:
+        external:
+          endpoints:
+          - http://${etcd}-0.node.automium.consul:2379
+          - http://${etcd}-1.node.automium.consul:2379
+          - http://${etcd}-2.node.automium.consul:2379
+      clusterName: ${hostname}
+      apiServer:
+        certSANs:
+        - $PRIVATE_IP
+        - ${public-ip}
+        - ${hostname}
+        extraVolumes:
+        - name: automium-conf
+          hostPath: /etc/kubernetes/automium
+          mountPath: /etc/kubernetes/automium
+        - name: openstack-conf
+          hostPath: /etc/kubernetes/openstack
+          mountPath: /etc/kubernetes/openstack
+        extraArgs:
+          authorization-mode: "Node,RBAC"
+          runtime-config: authentication.k8s.io/v1beta1=true
+          authentication-token-webhook-config-file: /etc/kubernetes/automium/webhook.conf
+          cloud-provider: openstack
+          cloud-config: /etc/kubernetes/openstack/cloud.conf
+          apiserver-count: "${master_count}"
+      controllerManager:
+        extraArgs:
+          cloud-provider: openstack
+          cloud-config: /etc/kubernetes/openstack/cloud.conf
+        extraVolumes:
+          - name: openstack-conf
+            hostPath: /etc/kubernetes/openstack
+            mountPath: /etc/kubernetes/openstack
+    path: /root/kubeadm-1.13-config.yml
     permissions: '0600'
 
   - content: |
@@ -492,7 +548,16 @@ write_files:
        mkdir -p /etc/kubernetes/automium && chmod 0700 /etc/kubernetes/automium
        curl -k -sS https://bastion.service.automium.consul:3001/.automium/ca > /etc/kubernetes/automium/webhook-ca.crt
        chmod 0600 /etc/kubernetes/automium/webhook-ca.crt
-       cat /root/kubeadm-config.yml | VERSION="$(dpkg -l | grep kubelet | awk '{ print $3 }' | cut -d "-" -f 1)" envsubst > /root/kubeadm-config.yml
+       export VERSION="$(dpkg -l | grep kubelet | awk '{ print $3 }' | cut -d "-" -f 1)"
+       export MAJOR_VERSION=$(echo $VERSION | cut -d '.' -f 1)
+       export MINOR_VERSION=$(echo $VERSION | cut -d '.' -f 2)
+       export PRIVATE_IP=$(ip -f inet -o addr show ens3|cut -d\  -f 7 | cut -d/ -f 1)
+       if [ $MINOR_VERSION -gt 10 ]; then
+         mv /root/kubeadm-1.13-config.yml /root/kubeadm-config.yml.tmp
+       else
+         mv /root/kubeadm-1.10-config.yml /root/kubeadm-config.yml.tmp
+       fi
+       cat /root/kubeadm-config.yml.tmp | envsubst > /root/kubeadm-config.yml
        kubeadm init --config /root/kubeadm-config.yml
        if [ $? -ne 0 ]; then
           sleep 5
