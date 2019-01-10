@@ -75,6 +75,8 @@ data "template_file" "cloud-config-master" {
     consul_port = "${var.consul_port}"
     consul_datacenter = "${var.consul_datacenter}"
     consul_encrypt = "${var.consul_encrypt}"
+    rancher_url = "${var.rancher_url}"
+    rancher_cluster_token = "${var.rancher_cluster_token}"
   }
 }
 

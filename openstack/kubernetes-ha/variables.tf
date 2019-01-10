@@ -86,3 +86,11 @@ variable "consul_datacenter" {
 
 variable "consul_encrypt" {
 }
+
+variable "rancher_url" {
+  default = "consul.service.automium.consul"
+}
+
+variable "rancher_cluster_token" {
+  default = ""
+}
