@@ -796,9 +796,7 @@ runcmd:
           # workaround https://github.com/ansible/ansible/issues/21562
           export HOME=/root
           cd /usr/src/cloud
-          #source venv/bin/activate
-          pip install ansible==2.6.2
-          pip install jmespath==0.9.3
+          source venv/bin/activate
           ansible-playbook -e ansible_python_interpreter=/usr/bin/python --connection=local playbook.yml
         ) >> /var/log/cloud-scripts.log 2>&1
         if [ $? == 0 ]; then
