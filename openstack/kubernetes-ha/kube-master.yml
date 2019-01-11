@@ -673,6 +673,36 @@ write_files:
     permissions: '0755'
     
   - content: |
+      - name: prepare consul
+        hosts: 127.0.0.1
+        pre_tasks:
+          - name: stop consul
+            service: name=consul state=stopped
+          - name: clean /opt/consul/data/serf/local.keyring
+            file: path=/opt/consul/data/serf/local.keyring state=absent
+        roles:
+          - role: entercloudsuite.consul
+            consul_config_validate: "{{ consul_user_home }}/bin/consul validate -config-format=json %s"
+            consul_configs:
+              main:
+                bind_addr: "{{ ansible_default_ipv4['address'] }}"
+                client_addr: 0.0.0.0
+                node_name: "{{ ansible_hostname }}"
+                data_dir: "{{ consul_data_dir }}"
+                encrypt: "${consul_encrypt}"
+                datacenter: "${consul_datacenter}"
+                enable_syslog: true
+                server: false
+                ui: true
+                enable_script_checks: true
+                services:
+                  - name: "${name}"
+                  - name: "exporter_node"
+                    port: 9100
+                rejoin_after_leave: true
+                retry_join:
+                  - "${consul}"
+
       - name: bootstrap phase
         hosts: 127.0.0.1
         tasks:
@@ -878,7 +908,6 @@ write_files:
     permissions: '0755'
 
 runcmd:
-  #- bash /root/bootstrap.sh
   #- rm /root/bootstrap.sh /root/kubeadm-config.yml /root/network.yaml
   - |
       bash <<'EOF'

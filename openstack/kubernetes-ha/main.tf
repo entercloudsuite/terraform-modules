@@ -84,6 +84,7 @@ data "template_file" "cloud-config-worker" {
   template = "${file("${path.module}/kube-worker.yml")}"
   count = "${var.worker_count}"
   vars {
+    name = "${var.worker_name}"
     master-ip  = "${element(module.kubernetes_master.instance-address,0)}"
     kube-token = "${format("%s.%s", random_string.kube-first-token-part.result, random_string.kube-second-token-part.result)}"
     os_api_url = "${var.cloud_os_api_url}"
@@ -92,6 +93,10 @@ data "template_file" "cloud-config-worker" {
     os_password = "${var.cloud_os_password}"
     os_region = "${var.cloud_os_region}"
     dns-service-addr = "${cidrhost(var.service-network-cidr, 10)}"
+    consul = "${var.consul}"
+    consul_port = "${var.consul_port}"
+    consul_datacenter = "${var.consul_datacenter}"
+    consul_encrypt = "${var.consul_encrypt}"
   }
 }
 
