@@ -22,17 +22,6 @@ data "openstack_networking_subnet_v2" "subnet" {
   region = "${var.region}"
 }
 
-# Security groups
-module "kubernetes-ssh_sg" {
-  source = "github.com/entercloudsuite/terraform-modules//openstack/security?ref=2.7"
-  name = "kubernetes-ssh"
-  region = "${var.region}"
-  protocol = "tcp"
-  port_range_min = 22
-  port_range_max = 22
-  allow_remote = "${var.access-cidr}"
-}
-
 module "kubernetes-api_sg" {
   source = "github.com/entercloudsuite/terraform-modules//openstack/security?ref=2.7"
   name = "kubernetes-api"
@@ -111,7 +100,7 @@ module "kubernetes_master" {
   discovery = "true"
   flavor = "${var.master_flavor}"
   network_name = "${var.network_name}"
-  sec_group = "${concat(var.custom_secgroups_master, list("${module.kubernetes-ssh_sg.sg_id}","${module.kubernetes-api_sg.sg_id}","${module.kubernetes-all-from-internal_sg.sg_id}"))}"
+  sec_group = "${concat(var.custom_secgroups_master, list("${module.kubernetes-api_sg.sg_id}","${module.kubernetes-all-from-internal_sg.sg_id}"))}"
   keypair = "${var.keyname}"
   userdata = "${data.template_file.cloud-config-master.*.rendered}"
   allowed_address_pairs = "0.0.0.0/0"
