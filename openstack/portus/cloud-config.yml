@@ -30,10 +30,7 @@ write_files:
                 enable_script_checks: true
                 services:
                   - name: "${name}"
-                    checks:
-                      - http: "http://127.0.0.1:443"
-                        method: "GET"
-                        interval: "2s"
+                    port: 443
                   - name: "exporter_node"
                     port: 9100
                 rejoin_after_leave: true
