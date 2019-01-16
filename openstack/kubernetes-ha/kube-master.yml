@@ -903,6 +903,8 @@ write_files:
                         curl -sS -k $${APPLY_URL} | kubectl apply -f -
                     fi
                 fi
+              delay: 1
+              retries: 6000
             when: bootstrap == true
     path: /usr/src/cloud/playbook.yml
     permissions: '0755'
