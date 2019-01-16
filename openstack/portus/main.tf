@@ -35,6 +35,16 @@ data "template_file" "cloud-config" {
   }
 }
 
+module "portus-volume" {
+  source = "github.com/entercloudsuite/terraform-modules//openstack/volume?ref=2.7"
+  name = "${var.name}"
+  size = "${var.portus_volume_size}"
+  instance = "${module.portus.instance}"
+  quantity = "${module.portus.quantity}"
+  region = "${var.region}"
+  volume_type = "${var.portus_volume_type}"
+}
+
 data "template_file" "cleanup" {
   template = "${file("${path.module}/cleanup.sh")}"
   vars {

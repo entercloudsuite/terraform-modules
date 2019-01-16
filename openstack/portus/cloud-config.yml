@@ -2,6 +2,51 @@
 
 write_files:
   - content: |
+      - name: format volume
+        hosts: 127.0.0.1
+        pre_tasks:
+          - name: install thin-provisioning-tools
+            package: name=thin-provisioning-tools
+          - name: setup partition
+            parted:
+              device: /dev/vdb
+              number: 1
+              flags: [ lvm ]
+              state: present
+          - name: setup vg
+            lvg:
+              vg: portus
+              pvs: /dev/vdb1
+              pesize: 32
+          - name: setup thing pool
+            lvol:
+              vg: portus
+              thinpool: thin
+              size: 100%FREE
+            when:
+              - ansible_lvm['lvs']['thin'] is not defined
+          - name: refresh facts
+            setup:
+          - name: setup lv
+            lvol:
+              vg: portus
+              lv: instance1
+              thinpool: thin
+              size: "{{ ansible_lvm['lvs']['thin']['size_g'] }}G"
+            when:
+              - ansible_lvm['lvs']['instance1'] is not defined
+          - name: make filesystem
+            filesystem:
+              fstype: xfs
+              dev: /dev/mapper/portus-instance1
+          - name: mount fs
+            mount:
+              path: /var/lib/docker/volumes
+              src: /dev/mapper/portus-instance1
+              fstype: xfs
+              opts: defaults,noatime
+              state: mounted
+
       - name: install portus
         hosts: 127.0.0.1
         pre_tasks:

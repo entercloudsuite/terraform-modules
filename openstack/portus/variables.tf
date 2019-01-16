@@ -49,6 +49,13 @@ variable "region" {
   default = "it-mil1"
 }
 
+variable "portus_volume_size" {
+}
+
+variable "portus_volume_type" {
+  default = "Top"
+}
+
 variable "portus_fqdn" {
 }
 
