@@ -4,7 +4,19 @@ write_files:
   - content: |
       - name: format volume
         hosts: 127.0.0.1
+        vars:
+          docker_volume_mountpoint: /var/lib/docker/volumes
         pre_tasks:
+          - name: stop docker
+            service: name=docker state=stopped
+          - name: cleanup "{{ docker_volume_mountpoint }}"
+            file: 
+              path="{{ docker_volume_mountpoint }}"
+              state="{{ item }}"
+            with_items:
+              - absent
+              - directory
+        tasks:
           - name: install thin-provisioning-tools
             package: name=thin-provisioning-tools
           - name: setup partition
@@ -41,11 +53,14 @@ write_files:
               dev: /dev/mapper/portus-instance1
           - name: mount fs
             mount:
-              path: /var/lib/docker/volumes
+              path: "{{ docker_volume_mountpoint }}"
               src: /dev/mapper/portus-instance1
               fstype: xfs
               opts: defaults,noatime
               state: mounted
+        post_tasks:
+          - name: startup docker
+            service: name=docker state=started
 
       - name: install portus
         hosts: 127.0.0.1
