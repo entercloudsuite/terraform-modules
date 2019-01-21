@@ -56,6 +56,9 @@ variable "portus_volume_type" {
   default = "Top"
 }
 
+variable "portus_password" {
+}
+
 variable "portus_fqdn" {
 }
 

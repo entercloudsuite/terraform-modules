@@ -29,6 +29,7 @@ data "template_file" "cloud-config" {
     consul_port = "${var.consul_port}"
     consul_datacenter = "${var.consul_datacenter}"
     consul_encrypt = "${var.consul_encrypt}"
+    portus_password = "${var.portus_password}"
     portus_fqdn = "${var.portus_fqdn}" 
     registry_fqdn = "${var.registry_fqdn}" 
     letsencrypt_email = "${var.letsencrypt_email}" 

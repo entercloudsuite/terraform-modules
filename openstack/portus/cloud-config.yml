@@ -71,6 +71,7 @@ write_files:
              file: path=/opt/consul/data/serf/local.keyring state=absent
         roles:
           - role: ansible-portus
+            portus_password: ${portus_password}
             portus_fqdn: ${portus_fqdn}
             registry_fqdn: ${registry_fqdn}
             letsencrypt_email: ${letsencrypt_email}

@@ -13,6 +13,7 @@ module "portus" {
   consul = "10.2.0.4"
   consul_datacenter = "automium"
   consul_encrypt = "SSfewkvwz5pcrzbdSBgEbQ=="
+  portus_password = "myportuspassword"
   portus_fqdn = "portus.example.com"
   registry_fqdn = "registry.example.com"
   letsencrypt_email = "sysadmins@test.com"
