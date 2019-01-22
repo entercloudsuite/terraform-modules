@@ -850,6 +850,20 @@ write_files:
               user: root
               key: "{{ lookup('file', '/root/.ssh/id_rsa.pub') }}"
 
+      - name: public kubernetes join token
+        hosts: 127.0.0.1
+        tasks:
+          - name: put kubernetes join token
+            uri:
+              url: "http://${consul}:${consul_port}/v1/kv/kubernetes/master/${name}/join_token"
+              method: PUT
+              status_code: 200
+              body: "${kube-token}"
+            register: ssh_key_consul
+            until: ssh_key_consul.failed == false
+            delay: 1
+            retries: 6000
+
       - name: kubernetes certificates and init
         hosts: 127.0.0.1
         tasks:
@@ -903,6 +917,8 @@ write_files:
                         curl -sS -k $${APPLY_URL} | kubectl apply -f -
                     fi
                 fi
+              register: rancher_add
+              until: rancher_add.rc == 0
               delay: 1
               retries: 6000
             when: bootstrap == true
