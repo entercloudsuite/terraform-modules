@@ -19,6 +19,10 @@ variable "discovery" {
   default = "false"
 }
 
+variable "discovery_port" {
+  default = 0
+}
+
 variable "quantity" {
   default = 1
 }
@@ -61,10 +65,6 @@ variable "keypair" {
 variable "userdata" {
   type = "list"
   default = [""]
-}
-
-variable "discovery_port" {
-  default = 0
 }
 
 variable "postdestroy" {
