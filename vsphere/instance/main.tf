@@ -139,7 +139,7 @@ data "external" "image_sync" {
     "/bin/bash",
     "-c",
     <<EOF
-export GOVC_URL='${var.user}:${var.password}@${var.vsphere_server}'
+export GOVC_URL='${var.vsphere_user}:${var.vsphere_password}@${var.vsphere_server}'
 export GOVC_INSECURE=1
 export TEMPLATE_NAME=${var.template}
 export TEMPLATE_DC=${var.datacenter}

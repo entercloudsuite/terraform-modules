@@ -1,7 +1,7 @@
-variable "user" {
+variable "vsphere_user" {
 }
 
-variable "password" {
+variable "vsphere_password" {
 }
 
 variable "vsphere_server" {
