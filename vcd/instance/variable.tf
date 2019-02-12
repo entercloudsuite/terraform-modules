@@ -13,6 +13,12 @@ variable "vcd_org" {
 variable "vcd_vdc" {
 }
 
+variable "template" {
+}
+
+variable "vcd_server"{
+}
+
 variable "network_name" {
   default = "TerraformNetwork01"
 }
