@@ -1,6 +1,6 @@
 resource "vcd_vapp" "vApp" {
  name = "vApp_${var.name}"
- network_name = "${data.vcd_network.vm-network.id}"
+ network_name = "${var.network_name}"
 }
 
 resource "vcd_vapp_vm" "instance" {
