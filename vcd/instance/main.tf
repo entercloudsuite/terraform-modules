@@ -52,7 +52,7 @@ resource "null_resource" "cloud_init_iso_clean" {
   count = "${var.quantity}"
   depends_on = ["data.external.iso_upload"]
   provisioner "local-exec" {
-    command = "rm ${path.module}/${var.name}-${count.index}-user-data.iso"
+    command = "stat ${path.module}/${var.name}-${count.index}-user-data.iso"
   }
 }
 
