@@ -1,11 +1,3 @@
-data "vcd_network" "vm-network" {
-  name          = "${var.network_name}"
-}
-
-data "vcd_virtual_machine" "template" {
-  name          = "${data.external.image_sync.result.template_name}"
-}
-
 resource "vcd_vapp" "vApp" {
  name = "vApp_${var.name}"
  network_name = "${data.vcd_network.vm-network.id}"
@@ -16,10 +8,10 @@ resource "vcd_vapp_vm" "instance" {
  count = "${var.quantity}"
  name = "${var.name}-${count.index}"
  catalog_name  = "${var.catalog}"
- template_name = "${data.vcd_virtual_machine.template.id}"
+ template_name = "${data.external.image_sync.result.template_name}"
  memory = "${var.memory}"
  cpus = "${var.cpus}"
- network_name = "${data.vcd_network.vm-network.id}"
+ network_name = "${var.network_name}"
  depends_on = ["vcd_vapp.vApp"]
 }
 resource "vcd_inserted_media" "ISO" {
