@@ -9,4 +9,4 @@
 #elif [[ $OUTPUT == *"Transfer Completed"* ]]; then
 #	jq -r -n --arg template_name "${TEMPLATE_NAME}" --arg output  "${TEMPLATE_NAME} uploaded successfully" '{"template_name":$template_name,"output":$output}'
 #fi
-exit 0
+jq -r -n --arg template_name "Ubuntu-16.04-CloudInit" --arg output  "Ubuntu-16.04-CloudInit uploaded successfully" '{"template_name":$template_name,"output":$output}'
