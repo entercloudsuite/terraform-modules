@@ -63,7 +63,7 @@ data "external" "iso_upload" {
     "/bin/bash",
     "-c",
     <<EOF
-export VCD_URL='${var.vcd_username}:${var.vcd_password}@${var.vcd_server}/cloud?org=${var.vcd_org}&vdc=${var.vcd_vdc}&vappTemplate=${var.template}&catalog=${var.catalog}'
+export VCD_URL='${var.vcd_username}:${var.vcd_password}@${var.vcd_server}/cloud?org=${var.vcd_org}&vdc=${var.vcd_vdc}&media=${var.template}&catalog=${var.catalog}'
 export ISO_PATH='${path.module}/${var.name}-${count.index}-user-data.iso'
 bash ${path.module}/iso_upload.sh
 EOF
