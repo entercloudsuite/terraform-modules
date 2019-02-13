@@ -1,0 +1,94 @@
+#cloud-config
+
+manage_etc_hosts: localhost
+
+write_files:
+  - content: |
+       [Service]
+       Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
+       Environment="KUBELET_SYSTEM_PODS_ARGS=--pod-manifest-path=/etc/kubernetes/manifests --allow-privileged=true"
+       Environment="KUBELET_NETWORK_ARGS=--network-plugin=cni --cni-conf-dir=/etc/cni/net.d --cni-bin-dir=/opt/cni/bin"
+       Environment="KUBELET_DNS_ARGS=--cluster-dns=${dns-service-addr} --cluster-domain=cluster.local"
+       Environment="KUBELET_AUTHZ_ARGS=--authorization-mode=Webhook --client-ca-file=/etc/kubernetes/pki/ca.crt"
+       Environment="KUBELET_CERTIFICATE_ARGS=--rotate-certificates=true --cert-dir=/var/lib/kubelet/pki"
+       Environment="KUBELET_LABEL_ARGS=--node-labels=node-role.kubernetes.io/worker="
+       ExecStart=
+       ExecStart=/usr/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_SYSTEM_PODS_ARGS $KUBELET_NETWORK_ARGS $KUBELET_DNS_ARGS $KUBELET_AUTHZ_ARGS $KUBELET_CADVISOR_ARGS $KUBELET_CERTIFICATE_ARGS $KUBELET_CLOUD_ARGS $KUBELET_LABEL_ARGS $KUBELET_EXTRA_ARGS
+    path: /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+    permissions: '0644'
+
+  - content: |
+       systemctl daemon-reload
+       systemctl restart kubelet
+       kubeadm join --token ${kube-token} --discovery-token-unsafe-skip-ca-verification ${master-ip}:6443
+    path: /root/bootstrap.sh
+    permissions: '0755'
+
+  - content: |
+      - name: prepare consul
+        hosts: 127.0.0.1
+        pre_tasks:
+          - name: stop consul
+            service: name=consul state=stopped
+          - name: clean /opt/consul/data/serf/local.keyring
+            file: path=/opt/consul/data/serf/local.keyring state=absent
+        roles:
+          - role: entercloudsuite.consul
+            consul_config_validate: "{{ consul_user_home }}/bin/consul validate -config-format=json %s"
+            consul_configs:
+              main:
+                bind_addr: "{{ ansible_default_ipv4['address'] }}"
+                client_addr: 0.0.0.0
+                node_name: "{{ ansible_hostname }}"
+                data_dir: "{{ consul_data_dir }}"
+                encrypt: "${consul_encrypt}"
+                datacenter: "${consul_datacenter}"
+                enable_syslog: true
+                server: false
+                ui: true
+                enable_script_checks: true
+                services:
+                  - name: "${name}"
+                  - name: "exporter_node"
+                    port: 9100
+                rejoin_after_leave: true
+                retry_join:
+                  - "${consul}"
+
+      - name: kubernetes init
+        hosts: 127.0.0.1
+        tasks:
+          - name: bootstrap kubernetes
+            shell: bash /root/bootstrap.sh
+            register: bootstrap_kubernetes
+            until: bootstrap_kubernetes.rc == 0
+            delay: 1
+            retries: 6000
+    path: /usr/src/cloud/playbook.yml
+    permissions: '0755'
+
+runcmd:
+  #- rm /root/bootstrap.sh
+  - |
+      bash <<'EOF'
+      export COMPLETED=false
+      while [ "$COMPLETED" == "false" ]; do
+        (
+          apt-get update || true
+          apt-get install python-pip -y || true
+          set -e errexit
+          set -o pipefail
+          # workaround https://github.com/ansible/ansible/issues/21562
+          export HOME=/root
+          cd /usr/src/cloud
+          source venv/bin/activate
+          ansible-playbook -e ansible_python_interpreter=/usr/bin/python --connection=local playbook.yml
+        ) >> /var/log/cloud-scripts.log 2>&1
+        if [ $? == 0 ]; then
+          COMPLETED=true
+        fi
+        sleep 1
+      done
+      EOF
+
+final_message: "Kubernetes worker is ready to use"

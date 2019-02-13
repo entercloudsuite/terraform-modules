@@ -145,7 +145,7 @@ export TEMPLATE_NAME=${var.template}
 export TEMPLATE_DC=${var.datacenter}
 export TEMPLATE_DS=${var.template_datastore}
 export TEMPLATE_URL=https://swift.entercloudsuite.com/v1/KEY_1a68c22a99cd4e558054ede2c878929d/automium-catalog-images/vsphere/${var.template}.ova
-export TEMPLATE_POOL=${data.vsphere_compute_cluster.cluster.resource_pool_id}
+export TEMPLATE_POOL=/${var.datacenter}/host/${var.cluster}/Resources
 export TEMPLATE_FOLDER=${var.folder}
 bash ${path.module}/image_sync.sh
 EOF
@@ -165,4 +165,8 @@ resource "null_resource" "postdestroy" {
       _NUMBER = "${count.index}"
     }
   }
+}
+
+output "instance-address" {
+  value = "${vsphere_virtual_machine.instance.*.default_ip_address}"
 }

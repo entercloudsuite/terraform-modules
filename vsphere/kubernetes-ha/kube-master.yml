@@ -1,0 +1,914 @@
+#cloud-config
+
+manage_etc_hosts: localhost
+
+write_files:
+  - content: |
+      clusters:
+        - name: automium-authn
+          cluster:
+            server: https://bastion.service.automium.consul:3001/v3/kubernetes/auth
+            certificate-authority: /etc/kubernetes/automium/webhook-ca.crt
+      current-context: webhook
+      contexts:
+        - context:
+            cluster: automium-authn
+          name: webhook
+    path: /etc/kubernetes/automium/webhook.conf
+    permissions: '0600'
+    
+  - content: |
+      # Calico Version v3.4.0
+      # https://docs.projectcalico.org/v3.4/releases#v3.4.0
+      # This manifest includes the following component versions:
+      #   calico/node:v3.4.0
+      #   calico/cni:v3.4.0
+      #   calico/kube-controllers:v3.4.0
+
+      # This ConfigMap is used to configure a self-hosted Calico installation.
+      kind: ConfigMap
+      apiVersion: v1
+      metadata:
+        name: calico-config
+        namespace: kube-system
+      data:
+        # Configure this with the location of your etcd cluster.
+        etcd_endpoints: "http://etcd-server-0.node.automium.consul:2379,http://etcd-server-1.node.automium.consul:2379,http://etcd-server-2.node.automium.consul:2379"
+
+        # If you're using TLS enabled etcd uncomment the following.
+        # You must also populate the Secret below with these files.
+        etcd_ca: ""   # "/calico-secrets/etcd-ca"
+        etcd_cert: "" # "/calico-secrets/etcd-cert"
+        etcd_key: ""  # "/calico-secrets/etcd-key"
+        # Configure the Calico backend to use.
+        calico_backend: "bird"
+
+        # Configure the MTU to use
+        veth_mtu: "1440"
+
+        # The CNI network configuration to install on each node.  The special
+        # values in this config will be automatically populated.
+        cni_network_config: |-
+          {
+            "name": "k8s-pod-network",
+            "cniVersion": "0.3.0",
+            "plugins": [
+              {
+                "type": "calico",
+                "log_level": "info",
+                "etcd_endpoints": "__ETCD_ENDPOINTS__",
+                "etcd_key_file": "__ETCD_KEY_FILE__",
+                "etcd_cert_file": "__ETCD_CERT_FILE__",
+                "etcd_ca_cert_file": "__ETCD_CA_CERT_FILE__",
+                "mtu": __CNI_MTU__,
+                "ipam": {
+                    "type": "calico-ipam"
+                },
+                "policy": {
+                    "type": "k8s"
+                },
+                "kubernetes": {
+                    "kubeconfig": "__KUBECONFIG_FILEPATH__"
+                }
+              },
+              {
+                "type": "portmap",
+                "snat": true,
+                "capabilities": {"portMappings": true}
+              }
+            ]
+          }
+
+      ---
+
+      # The following contains k8s Secrets for use with a TLS enabled etcd cluster.
+      # For information on populating Secrets, see http://kubernetes.io/docs/user-guide/secrets/
+      apiVersion: v1
+      kind: Secret
+      type: Opaque
+      metadata:
+        name: calico-etcd-secrets
+        namespace: kube-system
+      data:
+        # Populate the following with etcd TLS configuration if desired, but leave blank if
+        # not using TLS for etcd.
+        # The keys below should be uncommented and the values populated with the base64
+        # encoded contents of each file that would be associated with the TLS data.
+        # Example command for encoding a file contents: cat <file> | base64 -w 0
+        # etcd-key: null
+        # etcd-cert: null
+        # etcd-ca: null
+
+      ---
+      # This manifest installs the calico/node container, as well
+      # as the Calico CNI plugins and network config on
+      # each master and worker node in a Kubernetes cluster.
+      kind: DaemonSet
+      apiVersion: extensions/v1beta1
+      metadata:
+        name: calico-node
+        namespace: kube-system
+        labels:
+          k8s-app: calico-node
+      spec:
+        selector:
+          matchLabels:
+            k8s-app: calico-node
+        updateStrategy:
+          type: RollingUpdate
+          rollingUpdate:
+            maxUnavailable: 1
+        template:
+          metadata:
+            labels:
+              k8s-app: calico-node
+            annotations:
+              # This, along with the CriticalAddonsOnly toleration below,
+              # marks the pod as a critical add-on, ensuring it gets
+              # priority scheduling and that its resources are reserved
+              # if it ever gets evicted.
+              scheduler.alpha.kubernetes.io/critical-pod: ''
+          spec:
+            nodeSelector:
+              beta.kubernetes.io/os: linux
+            hostNetwork: true
+            tolerations:
+              # Make sure calico-node gets scheduled on all nodes.
+              - effect: NoSchedule
+                operator: Exists
+              # Mark the pod as a critical add-on for rescheduling.
+              - key: CriticalAddonsOnly
+                operator: Exists
+              - effect: NoExecute
+                operator: Exists
+            serviceAccountName: calico-node
+            # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
+            # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
+            terminationGracePeriodSeconds: 0
+            initContainers:
+              # This container installs the Calico CNI binaries
+              # and CNI network config file on each node.
+              - name: install-cni
+                image: quay.io/calico/cni:v3.4.0
+                command: ["/install-cni.sh"]
+                env:
+                  # Name of the CNI config file to create.
+                  - name: CNI_CONF_NAME
+                    value: "10-calico.conflist"
+                  # The CNI network config to install on each node.
+                  - name: CNI_NETWORK_CONFIG
+                    valueFrom:
+                      configMapKeyRef:
+                        name: calico-config
+                        key: cni_network_config
+                  # The location of the Calico etcd cluster.
+                  - name: ETCD_ENDPOINTS
+                    valueFrom:
+                      configMapKeyRef:
+                        name: calico-config
+                        key: etcd_endpoints
+                  # CNI MTU Config variable
+                  - name: CNI_MTU
+                    valueFrom:
+                      configMapKeyRef:
+                        name: calico-config
+                        key: veth_mtu
+                  # Prevents the container from sleeping forever.
+                  - name: SLEEP
+                    value: "false"
+                volumeMounts:
+                  - mountPath: /host/opt/cni/bin
+                    name: cni-bin-dir
+                  - mountPath: /host/etc/cni/net.d
+                    name: cni-net-dir
+                  - mountPath: /calico-secrets
+                    name: etcd-certs
+            containers:
+              # Runs calico/node container on each Kubernetes node.  This
+              # container programs network policy and routes on each
+              # host.
+              - name: calico-node
+                image: quay.io/calico/node:v3.4.0
+                env:
+                  # The location of the Calico etcd cluster.
+                  - name: ETCD_ENDPOINTS
+                    valueFrom:
+                      configMapKeyRef:
+                        name: calico-config
+                        key: etcd_endpoints
+                  # Location of the CA certificate for etcd.
+                  - name: ETCD_CA_CERT_FILE
+                    valueFrom:
+                      configMapKeyRef:
+                        name: calico-config
+                        key: etcd_ca
+                  # Location of the client key for etcd.
+                  - name: ETCD_KEY_FILE
+                    valueFrom:
+                      configMapKeyRef:
+                        name: calico-config
+                        key: etcd_key
+                  # Location of the client certificate for etcd.
+                  - name: ETCD_CERT_FILE
+                    valueFrom:
+                      configMapKeyRef:
+                        name: calico-config
+                        key: etcd_cert
+                  # Set noderef for node controller.
+                  - name: CALICO_K8S_NODE_REF
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: spec.nodeName
+                  # Choose the backend to use.
+                  - name: CALICO_NETWORKING_BACKEND
+                    valueFrom:
+                      configMapKeyRef:
+                        name: calico-config
+                        key: calico_backend
+                  # Cluster type to identify the deployment type
+                  - name: CLUSTER_TYPE
+                    value: "k8s,bgp"
+                  # Auto-detect the BGP IP address.
+                  - name: IP
+                    value: "autodetect"
+                  # Enable IPIP
+                  - name: CALICO_IPV4POOL_IPIP
+                    value: "Always"
+                  # Set MTU for tunnel device used if ipip is enabled
+                  - name: FELIX_IPINIPMTU
+                    valueFrom:
+                      configMapKeyRef:
+                        name: calico-config
+                        key: veth_mtu
+                  # The default IPv4 pool to create on startup if none exists. Pod IPs will be
+                  # chosen from this range. Changing this value after installation will have
+                  # no effect. This should fall within `--cluster-cidr`.
+                  - name: CALICO_IPV4POOL_CIDR
+                    value: "${pod-network-cidr}"
+                  # Disable file logging so `kubectl logs` works.
+                  - name: CALICO_DISABLE_FILE_LOGGING
+                    value: "true"
+                  # Set Felix endpoint to host default action to ACCEPT.
+                  - name: FELIX_DEFAULTENDPOINTTOHOSTACTION
+                    value: "ACCEPT"
+                  # Disable IPv6 on Kubernetes.
+                  - name: FELIX_IPV6SUPPORT
+                    value: "false"
+                  # Set Felix logging to "info"
+                  - name: FELIX_LOGSEVERITYSCREEN
+                    value: "info"
+                  - name: FELIX_HEALTHENABLED
+                    value: "true"
+                securityContext:
+                  privileged: true
+                resources:
+                  requests:
+                    cpu: 250m
+                livenessProbe:
+                  httpGet:
+                    path: /liveness
+                    port: 9099
+                    host: localhost
+                  periodSeconds: 10
+                  initialDelaySeconds: 10
+                  failureThreshold: 6
+                readinessProbe:
+                  exec:
+                    command:
+                    - /bin/calico-node
+                    - -bird-ready
+                    - -felix-ready
+                  periodSeconds: 10
+                volumeMounts:
+                  - mountPath: /lib/modules
+                    name: lib-modules
+                    readOnly: true
+                  - mountPath: /run/xtables.lock
+                    name: xtables-lock
+                    readOnly: false
+                  - mountPath: /var/run/calico
+                    name: var-run-calico
+                    readOnly: false
+                  - mountPath: /var/lib/calico
+                    name: var-lib-calico
+                    readOnly: false
+                  - mountPath: /calico-secrets
+                    name: etcd-certs
+            volumes:
+              # Used by calico/node.
+              - name: lib-modules
+                hostPath:
+                  path: /lib/modules
+              - name: var-run-calico
+                hostPath:
+                  path: /var/run/calico
+              - name: var-lib-calico
+                hostPath:
+                  path: /var/lib/calico
+              - name: xtables-lock
+                hostPath:
+                  path: /run/xtables.lock
+                  type: FileOrCreate
+              # Used to install CNI.
+              - name: cni-bin-dir
+                hostPath:
+                  path: /opt/cni/bin
+              - name: cni-net-dir
+                hostPath:
+                  path: /etc/cni/net.d
+              # Mount in the etcd TLS secrets with mode 400.
+              # See https://kubernetes.io/docs/concepts/configuration/secret/
+              - name: etcd-certs
+                secret:
+                  secretName: calico-etcd-secrets
+                  defaultMode: 0400
+      ---
+
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: calico-node
+        namespace: kube-system
+
+      ---
+      # This manifest deploys the Calico Kubernetes controllers.
+      # See https://github.com/projectcalico/kube-controllers
+      apiVersion: extensions/v1beta1
+      kind: Deployment
+      metadata:
+        name: calico-kube-controllers
+        namespace: kube-system
+        labels:
+          k8s-app: calico-kube-controllers
+        annotations:
+          scheduler.alpha.kubernetes.io/critical-pod: ''
+      spec:
+        # The controllers can only have a single active instance.
+        replicas: 1
+        strategy:
+          type: Recreate
+        template:
+          metadata:
+            name: calico-kube-controllers
+            namespace: kube-system
+            labels:
+              k8s-app: calico-kube-controllers
+          spec:
+            nodeSelector:
+              beta.kubernetes.io/os: linux
+            # The controllers must run in the host network namespace so that
+            # it isn't governed by policy that would prevent it from working.
+            hostNetwork: true
+            tolerations:
+              # Mark the pod as a critical add-on for rescheduling.
+              - key: CriticalAddonsOnly
+                operator: Exists
+              - key: node-role.kubernetes.io/master
+                effect: NoSchedule
+            serviceAccountName: calico-kube-controllers
+            containers:
+              - name: calico-kube-controllers
+                image: quay.io/calico/kube-controllers:v3.4.0
+                env:
+                  # The location of the Calico etcd cluster.
+                  - name: ETCD_ENDPOINTS
+                    valueFrom:
+                      configMapKeyRef:
+                        name: calico-config
+                        key: etcd_endpoints
+                  # Location of the CA certificate for etcd.
+                  - name: ETCD_CA_CERT_FILE
+                    valueFrom:
+                      configMapKeyRef:
+                        name: calico-config
+                        key: etcd_ca
+                  # Location of the client key for etcd.
+                  - name: ETCD_KEY_FILE
+                    valueFrom:
+                      configMapKeyRef:
+                        name: calico-config
+                        key: etcd_key
+                  # Location of the client certificate for etcd.
+                  - name: ETCD_CERT_FILE
+                    valueFrom:
+                      configMapKeyRef:
+                        name: calico-config
+                        key: etcd_cert
+                  # Choose which controllers to run.
+                  - name: ENABLED_CONTROLLERS
+                    value: policy,namespace,serviceaccount,workloadendpoint,node
+                volumeMounts:
+                  # Mount in the etcd TLS secrets.
+                  - mountPath: /calico-secrets
+                    name: etcd-certs
+                readinessProbe:
+                  exec:
+                    command:
+                    - /usr/bin/check-status
+                    - -r
+            volumes:
+              # Mount in the etcd TLS secrets with mode 400.
+              # See https://kubernetes.io/docs/concepts/configuration/secret/
+              - name: etcd-certs
+                secret:
+                  secretName: calico-etcd-secrets
+                  defaultMode: 0400
+
+      ---
+
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: calico-kube-controllers
+        namespace: kube-system
+      ---
+
+      # Include a clusterrole for the kube-controllers component,
+      # and bind it to the calico-kube-controllers serviceaccount.
+      kind: ClusterRole
+      apiVersion: rbac.authorization.k8s.io/v1beta1
+      metadata:
+        name: calico-kube-controllers
+      rules:
+        # Pods are monitored for changing labels.
+        # The node controller monitors Kubernetes nodes.
+        # Namespace and serviceaccount labels are used for policy.
+        - apiGroups:
+            - ""
+          resources:
+            - pods
+            - nodes
+            - namespaces
+            - serviceaccounts
+          verbs:
+            - watch
+            - list
+        # Watch for changes to Kubernetes NetworkPolicies.
+        - apiGroups:
+            - networking.k8s.io
+          resources:
+            - networkpolicies
+          verbs:
+            - watch
+            - list
+      ---
+      kind: ClusterRoleBinding
+      apiVersion: rbac.authorization.k8s.io/v1beta1
+      metadata:
+        name: calico-kube-controllers
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: calico-kube-controllers
+      subjects:
+      - kind: ServiceAccount
+        name: calico-kube-controllers
+        namespace: kube-system
+      ---
+      # Include a clusterrole for the calico-node DaemonSet,
+      # and bind it to the calico-node serviceaccount.
+      kind: ClusterRole
+      apiVersion: rbac.authorization.k8s.io/v1beta1
+      metadata:
+        name: calico-node
+      rules:
+        # The CNI plugin needs to get pods, nodes, and namespaces.
+        - apiGroups: [""]
+          resources:
+            - pods
+            - nodes
+            - namespaces
+          verbs:
+            - get
+        - apiGroups: [""]
+          resources:
+            - endpoints
+            - services
+          verbs:
+            # Used to discover service IPs for advertisement.
+            - watch
+            - list
+        - apiGroups: [""]
+          resources:
+            - nodes/status
+          verbs:
+            # Needed for clearing NodeNetworkUnavailable flag.
+            - patch
+      ---
+      apiVersion: rbac.authorization.k8s.io/v1beta1
+      kind: ClusterRoleBinding
+      metadata:
+        name: calico-node
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: calico-node
+      subjects:
+      - kind: ServiceAccount
+        name: calico-node
+        namespace: kube-system
+      ---
+    path: /root/network.yaml
+    permissions: '0600'
+
+  - content: |
+       [Service]
+       Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
+       Environment="KUBELET_SYSTEM_PODS_ARGS=--pod-manifest-path=/etc/kubernetes/manifests --allow-privileged=true"
+       Environment="KUBELET_NETWORK_ARGS=--network-plugin=cni --cni-conf-dir=/etc/cni/net.d --cni-bin-dir=/opt/cni/bin"
+       Environment="KUBELET_DNS_ARGS=--cluster-dns=${dns-service-addr} --cluster-domain=cluster.local"
+       Environment="KUBELET_AUTHZ_ARGS=--authorization-mode=Webhook --client-ca-file=/etc/kubernetes/pki/ca.crt"
+       Environment="KUBELET_CERTIFICATE_ARGS=--rotate-certificates=true --cert-dir=/var/lib/kubelet/pki"
+       ExecStart=
+       ExecStart=/usr/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_SYSTEM_PODS_ARGS $KUBELET_NETWORK_ARGS $KUBELET_DNS_ARGS $KUBELET_AUTHZ_ARGS $KUBELET_CADVISOR_ARGS $KUBELET_CERTIFICATE_ARGS $KUBELET_CLOUD_ARGS $KUBELET_EXTRA_ARGS
+    path: /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+    permissions: '0644'
+
+  - content: |
+      apiVersion: kubeadm.k8s.io/v1alpha1
+      kind: MasterConfiguration
+      kubernetesVersion: $VERSION
+      api:
+        advertiseAddress: "$PRIVATE_IP"
+      etcd:
+        endpoints:
+        - http://${etcd}-0.node.automium.consul:2379
+        - http://${etcd}-1.node.automium.consul:2379
+        - http://${etcd}-2.node.automium.consul:2379
+      networking:
+        dnsDomain: cluster.local
+        serviceSubnet: ${service-network-cidr}
+        podSubnet: ${pod-network-cidr}
+      apiServerExtraArgs:
+        runtime-config: authentication.k8s.io/v1beta1=true
+        authentication-token-webhook-config-file: /etc/kubernetes/automium/webhook.conf
+      apiServerExtraVolumes:
+        - name: automium-conf
+          hostPath: /etc/kubernetes/automium
+          mountPath: /etc/kubernetes/automium
+      token: ${kube-token}
+      tokenTTL: 0s
+      apiServerCertSANs:
+      - $PRIVATE_IP
+      apiServerExtraArgs:
+        apiserver-count: "${master_count}"
+    path: /root/kubeadm-1.10-config.yml
+    permissions: '0600'
+
+  - content: |
+      apiVersion: kubeadm.k8s.io/v1beta1
+      kind: InitConfiguration
+      bootstrapTokens:
+        - token: ${kube-token}
+          description: "kubernetes bootstrap token"
+          ttl: "0"
+      nodeRegistration:
+        name: "${hostname}"
+      localAPIEndpoint:
+        advertiseAddress: "$PRIVATE_IP"
+        bindPort: 6443
+      ---
+      apiVersion: kubeadm.k8s.io/v1beta1
+      kind: ClusterConfiguration
+      kubernetesVersion: $VERSION
+      networking:
+        dnsDomain: cluster.local
+        serviceSubnet: ${service-network-cidr}
+        podSubnet: ${pod-network-cidr}
+      etcd:
+        external:
+          endpoints:
+          - http://${etcd}-0.node.automium.consul:2379
+          - http://${etcd}-1.node.automium.consul:2379
+          - http://${etcd}-2.node.automium.consul:2379
+      clusterName: ${hostname}
+      apiServer:
+        certSANs:
+        - $PRIVATE_IP
+        - ${hostname}
+        extraVolumes:
+        - name: automium-conf
+          hostPath: /etc/kubernetes/automium
+          mountPath: /etc/kubernetes/automium
+        extraArgs:
+          authorization-mode: "Node,RBAC"
+          runtime-config: authentication.k8s.io/v1beta1=true
+          authentication-token-webhook-config-file: /etc/kubernetes/automium/webhook.conf
+          apiserver-count: "${master_count}"
+      controllerManager:
+    path: /root/kubeadm-1.13-config.yml
+    permissions: '0600'
+
+  - content: |
+       #!/bin/bash
+       systemctl daemon-reload
+       systemctl restart kubelet
+       mkdir -p /etc/kubernetes/automium && chmod 0700 /etc/kubernetes/automium
+       curl -k -sS https://bastion.service.automium.consul:3001/.automium/ca > /etc/kubernetes/automium/webhook-ca.crt
+       chmod 0600 /etc/kubernetes/automium/webhook-ca.crt
+       export VERSION="$(dpkg -l | grep kubelet | awk '{ print $3 }' | cut -d "-" -f 1)"
+       export MAJOR_VERSION=$(echo $VERSION | cut -d '.' -f 1)
+       export MINOR_VERSION=$(echo $VERSION | cut -d '.' -f 2)
+       export PRIVATE_IP="$(ip addr sh dev $(ip r | grep default | awk '{ print $5 }') | grep "inet\b" | awk '{ print $2 }' | cut -d '/' -f 1)"
+       if [ $MINOR_VERSION -gt 10 ]; then
+         mv /root/kubeadm-1.13-config.yml /root/kubeadm-config.yml.tmp
+       else
+         mv /root/kubeadm-1.10-config.yml /root/kubeadm-config.yml.tmp
+       fi
+       cat /root/kubeadm-config.yml.tmp | envsubst > /root/kubeadm-config.yml
+       kubeadm init --config /root/kubeadm-config.yml
+       if [ $? -ne 0 ]; then
+          sleep 5
+          kubeadm init --config /root/kubeadm-config.yml
+          if [ $? -ne 0 ]; then
+             echo "Cannot bootstrap Kubernetes. Exiting"
+             exit 1
+          fi
+       fi
+       mkdir -p /root/.kube
+       cp /etc/kubernetes/admin.conf /root/.kube/config
+       chown root:root /root/.kube/config
+       sleep 5
+       sudo kubectl apply -f /root/network.yaml
+       sync
+    path: /root/bootstrap.sh
+    permissions: '0755'
+    
+  - content: |
+      - name: prepare consul
+        hosts: 127.0.0.1
+        pre_tasks:
+          - name: stop consul
+            service: name=consul state=stopped
+          - name: clean /opt/consul/data/serf/local.keyring
+            file: path=/opt/consul/data/serf/local.keyring state=absent
+        roles:
+          - role: entercloudsuite.consul
+            consul_config_validate: "{{ consul_user_home }}/bin/consul validate -config-format=json %s"
+            consul_configs:
+              main:
+                bind_addr: "{{ ansible_default_ipv4['address'] }}"
+                client_addr: 0.0.0.0
+                node_name: "{{ ansible_hostname }}"
+                data_dir: "{{ consul_data_dir }}"
+                encrypt: "${consul_encrypt}"
+                datacenter: "${consul_datacenter}"
+                enable_syslog: true
+                server: false
+                ui: true
+                enable_script_checks: true
+                services:
+                  - name: "${name}"
+                  - name: "exporter_node"
+                    port: 9100
+                rejoin_after_leave: true
+                retry_join:
+                  - "${consul}"
+
+      - name: bootstrap phase
+        hosts: 127.0.0.1
+        tasks:
+          - name: bootstrap phase - create consul session
+            uri:
+              url: http://${consul}:${consul_port}/v1/session/create
+              method: PUT
+              status_code: 200
+              body_format: json
+            register: bootstrap_session_consul
+            until: bootstrap_session_consul.failed == false
+            delay: 1
+            retries: 6000
+          - set_fact:
+              bootstrap_session: "{{ bootstrap_session_consul.json | json_query('ID') }}" 
+          - name: bootstrap phase - aquire consul lock
+            uri:
+              url: "http://${consul}:${consul_port}/v1/kv/kubernetes/master/${name}/custom_bootstrap?acquire={{ bootstrap_session }}"
+              method: PUT
+              status_code: 200
+              body: "{ name: ${hostname}.node.${consul_datacenter}.consul }"
+            register: bootstrap_consul
+            until: bootstrap_consul.failed == false
+            delay: 1
+            retries: 6000
+          - set_fact:
+              bootstrap: "{{ bootstrap_consul.json | bool }}" 
+
+      - name: bootstrap one master node
+        hosts: 127.0.0.1
+        tasks:
+          - name: bootstrap kubernetes
+            shell: bash /root/bootstrap.sh
+            register: bootstrap_kubernetes
+            until: bootstrap_kubernetes.rc == 0
+            delay: 1
+            retries: 6000
+            when: bootstrap == true
+
+      - name: spread kubeconfig
+        hosts: 127.0.0.1
+        tasks:
+          - block:
+              - name: encrypt config
+                shell: 'cat ~/.kube/config | sed "s/    server:.*$ /    server: https:\/\/${name}.service.${consul_datacenter}.consul:6443/g" | openssl enc -e -base64 -A -aes-128-ctr -nopad -nosalt -k ${kube-token}'
+                register: kube_config_encrypt
+              - name: save encyrpted kube config
+                uri:
+                  url: "http://${consul}:${consul_port}/v1/kv/kubernetes/master/kubernetes-master/kube_conf"
+                  method: PUT
+                  status_code: 200
+                  body: "{{ kube_config_encrypt.stdout }}"
+                register: kube_config_consul
+                until: kube_config_consul.failed == false
+                delay: 1
+                retries: 6000
+            when: bootstrap == true
+          - name: get encrypted kube config
+            uri:
+              url: "http://${consul}:${consul_port}/v1/kv/kubernetes/master/kubernetes-master/kube_conf"
+              method: GET
+              status_code: 200
+              body_format: json
+            register: kube_config_encrypt
+            until: kube_config_encrypt.failed == false
+            delay: 1
+            retries: 6000
+          - name: create directory .kube
+            file: path=/root/.kube state=directory
+          - name: decrypt kube_config
+            shell: 'echo -n {{ kube_config_encrypt.json[0].Value | b64decode }} | openssl enc -d -base64 -A -aes-128-ctr -nopad -nosalt -k ${kube-token} > /root/.kube/config_cloud'
+
+      - name: generate and spread ssh keys
+        hosts: 127.0.0.1
+        tasks:
+          - block:
+              - name: generate ssh keys
+                shell: ssh-keygen -b 2048 -t rsa -f /tmp/id_rsa -q -N "" -P ${kube-token}
+                args:
+                  creates: /tmp/id_rsa
+              - name: put private ssh key
+                uri:
+                  url: "http://${consul}:${consul_port}/v1/kv/kubernetes/master/${name}/custom_ssh_key"
+                  method: PUT
+                  status_code: 200
+                  body: "{{ lookup('file', '/tmp/id_rsa') }}"
+                register: ssh_key_consul
+                until: ssh_key_consul.failed == false
+                delay: 1
+                retries: 6000
+              - name: put public ssh key
+                uri:
+                  url: "http://${consul}:${consul_port}/v1/kv/kubernetes/master/${name}/custom_ssh_key_pub"
+                  method: PUT
+                  status_code: 200
+                  body: "{{ lookup('file', '/tmp/id_rsa.pub') }}"
+                register: ssh_key_pub_consul
+                until: ssh_key_pub_consul.failed == false
+                delay: 1
+                retries: 6000
+              - name: remove keys from temp dir
+                file:
+                  path: "{{ item }}"
+                  state: absent
+                with_items:
+                  - /tmp/id_rsa
+                  - /tmp/id_rsa.pub
+            when: bootstrap == true
+          - name: get private ssh key
+            uri:
+              url: http://${consul}:${consul_port}/v1/kv/kubernetes/master/${name}/custom_ssh_key
+              method: GET
+              status_code: 200
+              body_format: json
+            register: ssh_key_consul
+            until: ssh_key_consul.failed == false
+            delay: 1
+            retries: 6000
+          - name: write private encrypted ssh key
+            copy:
+              content: "{{ ssh_key_consul.json[0] | json_query('Value') | b64decode }}"
+              dest: /root/.ssh/id_rsa.enc
+              mode: 0400
+          - name: decrypt ssh keys
+            shell: openssl rsa -in /root/.ssh/id_rsa.enc -out /root/.ssh/id_rsa -passin pass:${kube-token} && chmod 400 /root/.ssh/id_rsa
+            args:
+              creates: /root/.ssh/id_rsa
+          - name: get public ssh key
+            uri:
+              url: http://${consul}:${consul_port}/v1/kv/kubernetes/master/${name}/custom_ssh_key_pub
+              method: GET
+              status_code: 200
+              body_format: json
+            register: ssh_key_pub_consul
+            until: ssh_key_pub_consul.failed == false
+            delay: 1
+            retries: 6000
+          - name: write public ssh key
+            copy:
+              content: "{{ ssh_key_pub_consul.json[0] | json_query('Value') | b64decode }}"
+              dest: /root/.ssh/id_rsa.pub
+              mode: 0400
+          - name: enable ssh key for direct root access
+            authorized_key:
+              user: root
+              key: "{{ lookup('file', '/root/.ssh/id_rsa.pub') }}"
+
+      - name: public kubernetes join token
+        hosts: 127.0.0.1
+        tasks:
+          - name: put kubernetes join token
+            uri:
+              url: "http://${consul}:${consul_port}/v1/kv/kubernetes/master/${name}/join_token"
+              method: PUT
+              status_code: 200
+              body: "${kube-token}"
+            register: ssh_key_consul
+            until: ssh_key_consul.failed == false
+            delay: 1
+            retries: 6000
+
+      - name: kubernetes certificates and init
+        hosts: 127.0.0.1
+        tasks:
+          - block:
+            - name: get a master and ready node
+              shell: kubectl get nodes --insecure-skip-tls-verify --kubeconfig=/root/.kube/config_cloud | grep master | grep ' Ready' | cut -f1 -d ' ' | head -n1
+              register: master_node
+              until: ( master_node.failed == false ) and
+                ( master_node.stdout != "" )
+              delay: 1
+              retries: 6000
+            - name: copy certificates from master node
+              shell: scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r {{ master_node.stdout }}.node.${consul_datacenter}.consul:/etc/kubernetes/pki /etc/kubernetes/
+            - name: clean apiserver cert
+              shell: rm /etc/kubernetes/pki/apiserver.*
+            - name: bootstrap kubernetes
+              shell: bash /root/bootstrap.sh
+              register: bootstrap_kubernetes
+              until: bootstrap_kubernetes.rc == 0
+              delay: 1
+              retries: 6000
+            when: bootstrap == false
+
+      - name: add kubernetes cluster to rancher
+        hosts: 127.0.0.1
+        tasks:
+          - block:
+            - name: get a master and ready node
+              shell: kubectl get nodes --insecure-skip-tls-verify --kubeconfig=/root/.kube/config_cloud | grep master | grep ' Ready' | cut -f1 -d ' ' | head -n1
+              register: master_node
+              until: ( master_node.failed == false ) and
+                ( master_node.stdout != "" )
+              delay: 1
+              retries: 6000
+            - name: run script to add kubernetes to rancher
+              shell: |
+                #!/bin/sh
+
+                RANCHER_URL="${rancher_url}"
+                RANCHER_CLUSTER_TOKEN="${rancher_cluster_token}"
+
+                CLUSTER_ID=$(curl -sS -k -H "Content-Type: application/json" -H "Authorization: Bearer $${RANCHER_CLUSTER_TOKEN}" "https://$${RANCHER_URL}/v3/cluster" --data-binary '{"dockerRootDir":"/var/lib/docker","enableNetworkPolicy":false,"type":"cluster","name":"kubernetes-cluster"}' | jq '.id' | tr -d "\"")
+
+                if [ "$${CLUSTER_ID}" != "null" ]; then
+                    echo "Cluster created with ID $${CLUSTER_ID} -- waiting for manifest generation..."
+                    sleep 5
+                    APPLY_URL=$(curl -sS -k -H "Content-Type: application/json" -H "Authorization: Bearer $${RANCHER_CLUSTER_TOKEN}" "https://$${RANCHER_URL}/v3/clusterregistrationtoken" --data-binary "{\"type\":\"clusterRegistrationToken\",\"clusterId\":\"$${CLUSTER_ID}\"}" | jq '.manifestUrl' | tr -d "\"")
+
+                    if [ "$${APPLY_URL}" != "null" ]; then
+                        echo "Manifest URL: $${APPLY_URL}"
+                        curl -sS -k $${APPLY_URL} | kubectl apply -f -
+                    fi
+                fi
+              register: rancher_add
+              until: rancher_add.rc == 0
+              delay: 1
+              retries: 6000
+            when: bootstrap == true
+    path: /usr/src/cloud/playbook.yml
+    permissions: '0755'
+
+runcmd:
+  #- rm /root/bootstrap.sh /root/kubeadm-config.yml /root/network.yaml
+  - |
+      bash <<'EOF'
+      export COMPLETED=false
+      while [ "$COMPLETED" == "false" ]; do
+        (
+          apt-get update || true
+          apt-get install python-pip -y || true
+          set -e errexit
+          set -o pipefail
+          # workaround https://github.com/ansible/ansible/issues/21562
+          export HOME=/root
+          cd /usr/src/cloud
+          source venv/bin/activate
+          ansible-playbook -e ansible_python_interpreter=/usr/bin/python --connection=local playbook.yml
+        ) >> /var/log/cloud-scripts.log 2>&1
+        if [ $? == 0 ]; then
+          COMPLETED=true
+        fi
+        sleep 1
+      done
+      EOF
+
+final_message: "Kubernetes master is ready to use"
