@@ -13,6 +13,9 @@ variable "vcd_org" {
 variable "vcd_vdc" {
 }
 
+variable "vcd_server" {
+}
+
 variable "quantity" {
   default = 3
 }
