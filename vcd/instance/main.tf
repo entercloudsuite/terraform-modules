@@ -75,7 +75,7 @@ data "external" "image_sync" {
     "/bin/bash",
     "-c",
     <<EOF
-export VCD_URL='${var.vcd_username}:${var.vcd_password}@${var.vcd_server}/cloud?org=${var.vcd_org}&vdc=${var.vcd_vdc}&vappTemplate=${var.template}&catalog=${var.catalog}")'
+export VCD_URL='${var.vcd_username}:${var.vcd_password}@${var.vcd_server}/cloud?org=${var.vcd_org}&vdc=${var.vcd_vdc}&vappTemplate=${var.template}&catalog=${var.catalog}'
 export TEMPLATE_NAME=${var.template}
 export TEMPLATE_URL=https://swift.entercloudsuite.com/v1/KEY_1a68c22a99cd4e558054ede2c878929d/automium-catalog-images/vsphere/${var.template}.ova
 bash ${path.module}/image_sync.sh
