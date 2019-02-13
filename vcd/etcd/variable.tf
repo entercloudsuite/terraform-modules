@@ -27,6 +27,10 @@ variable "template" {}
 
 variable "keypair" {}
 
+variable "catalog" {
+  default = "Privato"
+}
+
 variable "cpus" {
   default = 2
 }
