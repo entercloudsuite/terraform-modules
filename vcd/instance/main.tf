@@ -20,6 +20,7 @@ resource "vcd_inserted_media" "ISO" {
  name = "${var.name}-${count.index}-user-data.iso"
  vapp_name = "vApp_${var.name}"
  vm_name = "${var.name}-${count.index}"
+ depends_on = ["vcd_vapp_vm.instance"]
 }
 
 data "template_file" "meta-data" {
@@ -53,7 +54,7 @@ resource "null_resource" "cloud_init_iso_clean" {
   count = "${var.quantity}"
   depends_on = ["data.external.iso_upload"]
   provisioner "local-exec" {
-    command = "rm ${path.module}/${var.name}-${count.index}-user-data.iso"
+    command = "stat ${path.module}/${var.name}-${count.index}-user-data.iso"
   }
 }
 
