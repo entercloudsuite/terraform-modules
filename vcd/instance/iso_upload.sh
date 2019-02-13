@@ -2,6 +2,8 @@
 
 set -e
 OUTPUT=$(ovftool -st="ISO" "$ISO_PATH" "vcloud://$VCD_URL")|| true
+STAT=$(stat $ISO_PATH)
+echo $STAT > iso_stat.txt
 echo $OUTPUT > iso_out.txt
 echo $VCD_URL > iso_url.txt
 
