@@ -7,7 +7,6 @@ echo $OUTPUT > out.txt
 echo $VCD_URL > url.txt
 
 if [[ $OUTPUT == *"vApp name already found"* ]]; then
-	echo ${TEMPLATE_NAME} already exist, skip image upload
 	jq -r -n --arg template_name "${TEMPLATE_NAME}" --arg output  "${TEMPLATE_NAME} already exist" '{"template_name":$template_name,"output":$output}'
 elif [[ $OUTPUT == *"Transfer Completed"* ]]; then
 	jq -r -n --arg template_name "${TEMPLATE_NAME}" --arg output  "${TEMPLATE_NAME} uploaded successfully" '{"template_name":$template_name,"output":$output}'
