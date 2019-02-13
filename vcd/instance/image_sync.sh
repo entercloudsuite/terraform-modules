@@ -3,6 +3,7 @@
 set -e
 
 OUTPUT=$(ovftool -tt=vCloud $TEMPLATE_URL "vcloud://$VCD_URL")|| true
+echo $OUTPUT
 
 if [[ $OUTPUT == *"vApp name already found"* ]]; then
 	echo ${TEMPLATE_NAME} already exist, skip image upload
