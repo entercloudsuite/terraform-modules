@@ -23,17 +23,11 @@ resource "vcd_inserted_media" "ISO" {
  vm_name = "${var.name}-${count.index}"
  depends_on = ["vcd_vapp_vm.instance"]
 }
-resource "vcd_vapp_vm" "instance_on" {
- vapp_name = "vApp_${var.name}"
- count = "${var.quantity}"
- name = "${var.name}-${count.index}"
- catalog_name  = "${var.catalog}"
- template_name = "${data.external.image_sync.result.template_name}"
- memory = "${var.memory}"
- cpus = "${var.cpus}"
+resource "vcd_vapp" "vApp_on" {
+ name = "vApp_${var.name}"
  network_name = "${var.network_name}"
- depends_on = ["vcd_inserted_media.ISO"]
  power_on = "true"
+ depends_on = ["vcd_inserted_media.ISO"]
 }
 
 data "template_file" "meta-data" {
