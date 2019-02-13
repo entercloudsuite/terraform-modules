@@ -52,7 +52,7 @@ resource "null_resource" "cloud_init_iso_clean" {
   count = "${var.quantity}"
   depends_on = ["data.external.iso_upload"]
   provisioner "local-exec" {
-    command = "stat ${path.module}/${var.name}-${count.index}-user-data.iso"
+    command = "rm ${path.module}/${var.name}-${count.index}-user-data.iso"
   }
 }
 
@@ -63,7 +63,7 @@ data "external" "iso_upload" {
     "/bin/bash",
     "-c",
     <<EOF
-export VCD_URL='${var.vcd_username}:${var.vcd_password}@${var.vcd_server}/cloud?org=${var.vcd_org}&vdc=${var.vcd_vdc}&media=${var.name}-${count.index}-user-data.iso&catalog=${var.catalog}")'
+export VCD_URL='${var.vcd_username}:${var.vcd_password}@${var.vcd_server}/cloud?org=${var.vcd_org}&vdc=${var.vcd_vdc}&vappTemplate=${var.template}&catalog=${var.catalog}'
 export ISO_PATH='${path.module}/${var.name}-${count.index}-user-data.iso'
 bash ${path.module}/iso_upload.sh
 EOF
