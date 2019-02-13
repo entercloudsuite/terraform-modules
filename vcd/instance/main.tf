@@ -15,6 +15,7 @@ resource "vcd_vapp_vm" "instance" {
  depends_on = ["vcd_vapp.vApp"]
 }
 resource "vcd_inserted_media" "ISO" {
+ count = "${var.quantity}"
  catalog = "${var.catalog}"
  name = "${var.name}-${count.index}-user-data.iso"
  vapp_name = "vApp_${var.name}"
@@ -63,7 +64,7 @@ data "external" "iso_upload" {
     "/bin/bash",
     "-c",
     <<EOF
-export VCD_URL='${var.vcd_username}:${var.vcd_password}@${var.vcd_server}/cloud?org=${var.vcd_org}&vdc=${var.vcd_vdc}&media=${var.template}&catalog=${var.catalog}'
+export VCD_URL='${var.vcd_username}:${var.vcd_password}@${var.vcd_server}/cloud?org=${var.vcd_org}&vdc=${var.vcd_vdc}&media=${var.name}-${count.index}-user-data.iso&catalog=${var.catalog}'
 export ISO_PATH='${path.module}/${var.name}-${count.index}-user-data.iso'
 bash ${path.module}/iso_upload.sh
 EOF
