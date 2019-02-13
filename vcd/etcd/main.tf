@@ -13,6 +13,7 @@ module "etcd" {
   vcd_org = "${var.vcd_org}"
   vcd_vdc = "${var.vcd_vdc}"
   vcd_url = "${var.vcd_url}"
+  vcd_server = "${var.vcd_server}"
   catalog = "${var.catalog}"
   discovery = "true"
   discovery_port = "2380"
