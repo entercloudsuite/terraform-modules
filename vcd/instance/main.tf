@@ -23,7 +23,7 @@ resource "vcd_inserted_media" "ISO" {
  vm_name = "${var.name}-${count.index}"
  depends_on = ["vcd_vapp_vm.instance"]
 }
-resource "vcd_vapp_vm" "instance" {
+resource "vcd_vapp_vm" "instance_on" {
  vapp_name = "vApp_${var.name}"
  count = "${var.quantity}"
  name = "${var.name}-${count.index}"
