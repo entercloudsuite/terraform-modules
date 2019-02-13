@@ -1,6 +1,7 @@
 resource "vcd_vapp" "vApp" {
  name = "vApp_${var.name}"
  network_name = "${var.network_name}"
+ power_on = "false"
 }
 
 resource "vcd_vapp_vm" "instance" {
@@ -23,11 +24,12 @@ resource "vcd_inserted_media" "ISO" {
  vm_name = "${var.name}-${count.index}"
  depends_on = ["vcd_vapp_vm.instance"]
 }
+
 resource "vcd_vapp" "vApp_on" {
  name = "vApp_${var.name}"
  network_name = "${var.network_name}"
  power_on = "true"
- depends_on = ["vcd_inserted_media.ISO"]
+ depends_on = ["vcd_inserted_media.ISO"]
 }
 
 data "template_file" "meta-data" {
