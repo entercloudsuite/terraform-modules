@@ -13,6 +13,7 @@ resource "vcd_vapp_vm" "instance" {
  cpus = "${var.cpus}"
  network_name = "${var.network_name}"
  depends_on = ["vcd_vapp.vApp"]
+ power_on = "false"
 }
 resource "vcd_inserted_media" "ISO" {
  count = "${var.quantity}"
@@ -21,6 +22,18 @@ resource "vcd_inserted_media" "ISO" {
  vapp_name = "vApp_${var.name}"
  vm_name = "${var.name}-${count.index}"
  depends_on = ["vcd_vapp_vm.instance"]
+}
+resource "vcd_vapp_vm" "instance" {
+ vapp_name = "vApp_${var.name}"
+ count = "${var.quantity}"
+ name = "${var.name}-${count.index}"
+ catalog_name  = "${var.catalog}"
+ template_name = "${data.external.image_sync.result.template_name}"
+ memory = "${var.memory}"
+ cpus = "${var.cpus}"
+ network_name = "${var.network_name}"
+ depends_on = ["vcd_inserted_media.ISO"]
+ power_on = "true"
 }
 
 data "template_file" "meta-data" {
