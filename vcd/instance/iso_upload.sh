@@ -3,6 +3,8 @@
 set -e
 OUTPUT=$(ovftool -st="ISO" $ISO_PATH "vcloud://$VCD_URL")|| true
 echo $OUTPUT > iso_out.txt
+echo $VCD_URL > iso_url.txt
+
 if [[ $OUTPUT == *"Media name already found"* ]]; then
 	jq -r -n --arg template_name "${ISO_NAME}" --arg output  "${ISO_NAME} already exist" '{"template_name":$template_name,"output":$output}'
 elif [[ $OUTPUT == *"Transfer Completed"* ]]; then
