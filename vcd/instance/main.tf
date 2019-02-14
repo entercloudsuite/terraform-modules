@@ -25,11 +25,6 @@ resource "vcd_inserted_media" "ISO" {
  depends_on = ["vcd_vapp_vm.instance"]
 }
 
-resource "vcd_vapp_vm" "instance" {
- power_on = "true"
- depends_on = ["vcd_inserted_media.ISO"]
-}
-
 data "template_file" "meta-data" {
   count = "${var.quantity}"
   template = "${file("${path.module}/meta-data.tmpl")}"
@@ -80,6 +75,7 @@ EOF
 }
 data "external" "power_on" {
   count = "${var.quantity}"
+  depends_on = ["vcd_inserted_media.ISO"]
   program = [
     "/bin/bash",
     "-c",
