@@ -71,6 +71,7 @@ write_files:
                 enable_script_checks: true
                 services:
                   - name: "${name}"
+                    port: 2380
                   - name: "exporter_node"
                     port: 9100
                 rejoin_after_leave: true
