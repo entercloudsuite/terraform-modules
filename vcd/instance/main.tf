@@ -22,6 +22,7 @@ resource "vcd_inserted_media" "ISO" {
  name = "${var.name}-${count.index}-user-data.iso"
  vapp_name = "vApp_${var.name}"
  vm_name = "${var.name}-${count.index}"
+ depends_on = ["vcd_vapp_vm.instance"]
 }
 
 data "template_file" "meta-data" {
