@@ -22,6 +22,17 @@ resource "vcd_inserted_media" "ISO" {
  name = "${var.name}-${count.index}-user-data.iso"
  vapp_name = "vApp_${var.name}"
  vm_name = "${var.name}-${count.index}"
+   provisioner "local-exec" {
+  when = "destroy"
+  environment {
+    VCD_AUTH = "${var.vcd_username}@${var.vcd_org}:${var.vcd_password}"
+    VCD_URL = "${var.vcd_url}"
+    VM_NAME = "${var.name}-${count.index}"
+    ACTION = "powerOff"
+  }
+    interpreter = ["bash", "-c"]
+    command = "${path.module}/power_ctl.sh && sleep 30"
+  }
  depends_on = ["vcd_vapp_vm.instance"]
 }
 
@@ -44,7 +55,7 @@ cat <<'EOS' > ${path.module}/${var.name}-${count.index}-iso/user-data
 ${element(var.userdata,count.index)}
 EOS
 cat <<'EOS' > ${path.module}/${var.name}-${count.index}-iso/meta-data
-${data.template_file.meta-data.*.rendered[count.index]} 
+${data.template_file.meta-data.*.rendered[count.index]}
 EOS
 genisoimage -output ${path.module}/${var.name}-${count.index}-user-data.iso -volid cidata -joliet -rock ${path.module}/${var.name}-${count.index}-iso/user-data ${path.module}/${var.name}-${count.index}-iso/meta-data
 rm -rf ${path.module}/${var.name}-${count.index}-iso
@@ -59,7 +70,6 @@ resource "null_resource" "cloud_init_iso_clean" {
     command = "stat ${path.module}/${var.name}-${count.index}-user-data.iso"
   }
 }
-
 data "external" "iso_upload" {
   count = "${var.quantity}"
   depends_on = ["null_resource.cloud_init_iso"]
@@ -84,7 +94,7 @@ export VCD_AUTH='${var.vcd_username}@${var.vcd_org}:${var.vcd_password}'
 export VCD_URL='${var.vcd_url}'
 export VM_NAME='${var.name}-${count.index}'
 export ACTION='powerOn'
-bash ${path.module}/power_on.sh
+bash ${path.module}/power_ctl.sh
 EOF
   ]
 }
@@ -105,21 +115,13 @@ EOF
 output "image_sync_message" {
   value = "${data.external.image_sync.result.output}"
 }
-
 resource "null_resource" "postdestroy" {
-  count = "${var.quantity}"
-  provisioner "local-exec" {
-    when = "destroy"
-    program = [
-    "/bin/bash",
-    "-c",
-    <<EOF
-export VCD_AUTH='${var.vcd_username}@${var.vcd_org}:${var.vcd_password}'
-export VCD_URL='${var.vcd_url}'
-export VM_NAME='${var.name}-${count.index}'
-export ACTION='powerOff'
-bash ${path.module}/power_on.sh
-EOF
-  ]
-    }
+ count = "${var.quantity}"
+ provisioner "local-exec" {
+   when = "destroy"
+   command = "${var.postdestroy}"
+   environment {
+     _NUMBER = "${count.index}"
+   }
+ }
 }
