@@ -13,6 +13,17 @@ resource "vcd_vapp_vm" "instance" {
  memory = "${var.memory}"
  cpus = "${var.cpus}"
  network_name = "${var.network_name}"
+ provisioner "local-exec" {
+  when = "destroy"
+  environment {
+    VCD_AUTH = "${var.vcd_username}@${var.vcd_org}:${var.vcd_password}"
+    VCD_URL = "${var.vcd_url}"
+    VM_NAME = "${var.name}-${count.index}"
+    ACTION = "powerOn"
+  }
+    interpreter = ["bash", "-c"]
+    command = "${path.module}/power_ctl.sh && sleep 30"
+ }
  depends_on = ["vcd_vapp.vApp"]
  power_on = "false"
 }
@@ -22,6 +33,17 @@ resource "vcd_inserted_media" "ISO" {
  name = "${var.name}-${count.index}-user-data.iso"
  vapp_name = "vApp_${var.name}"
  vm_name = "${var.name}-${count.index}"
+ provisioner "local-exec" {
+  when = "destroy"
+  environment {
+    VCD_AUTH = "${var.vcd_username}@${var.vcd_org}:${var.vcd_password}"
+    VCD_URL = "${var.vcd_url}"
+    VM_NAME = "${var.name}-${count.index}"
+    ACTION = "powerOff"
+  }
+    interpreter = ["bash", "-c"]
+    command = "${path.module}/power_ctl.sh && sleep 30"
+ }
  depends_on = ["vcd_vapp_vm.instance"]
 }
 
