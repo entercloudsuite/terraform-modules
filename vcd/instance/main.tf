@@ -22,17 +22,6 @@ resource "vcd_inserted_media" "ISO" {
  name = "${var.name}-${count.index}-user-data.iso"
  vapp_name = "vApp_${var.name}"
  vm_name = "${var.name}-${count.index}"
-   provisioner "local-exec" {
-  when = "destroy"
-  environment {
-    VCD_AUTH = "${var.vcd_username}@${var.vcd_org}:${var.vcd_password}"
-    VCD_URL = "${var.vcd_url}"
-    VM_NAME = "${var.name}-${count.index}"
-    ACTION = "powerOff"
-  }
-    interpreter = ["bash", "-c"]
-    command = "${path.module}/power_ctl.sh && sleep 30"
-  }
  depends_on = ["vcd_vapp_vm.instance"]
 }
 
@@ -67,7 +56,7 @@ resource "null_resource" "cloud_init_iso_clean" {
   count = "${var.quantity}"
   depends_on = ["data.external.iso_upload"]
   provisioner "local-exec" {
-    command = "stat ${path.module}/${var.name}-${count.index}-user-data.iso"
+    command = "rm ${path.module}/${var.name}-${count.index}-user-data.iso"
   }
 }
 data "external" "iso_upload" {
