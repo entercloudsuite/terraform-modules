@@ -5,4 +5,5 @@ VM_URL=$(curl -s -i -k -H "Accept:application/*+xml;version=1.5" -H "x-vcloud-au
 echo $VM_URL > vcd_poweron_url.txt
 POWERON=$(curl -s -i -k -H "Accept:application/*+xml;version=1.5" -H "x-vcloud-authorization: $TOKEN" -X POST $VM_URL"/power/action/"$ACTION)
 echo $POWERON > vcd_poweron.txt
+sleep 30
 jq -r -n --arg vm_name "${VM_NAME}" --arg output  "${ACTION}" '{"vm_name":$vm_name,"output":$output}'
