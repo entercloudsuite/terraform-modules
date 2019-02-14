@@ -82,7 +82,7 @@ data "external" "power_on" {
     <<EOF
 export VCD_AUTH='${var.vcd_username}@${var.vcd_org}:${var.vcd_password}'
 export VCD_URL='${var.vcd_url}'
-export VM_NAME='${var.name}'
+export VM_NAME='${var.name}-${count.index}'
 bash ${path.module}/power_on.sh
 EOF
   ]
