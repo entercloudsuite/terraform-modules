@@ -29,6 +29,11 @@ data "template_file" "etcd-cloudinit" {
     template = "${file("${path.module}/etcd-cloudinit.yml")}"
     vars {
         etcd_token = "${random_string.cluster-token.result}"
+        name = "${var.name}"
+        consul = "${var.consul}"
+        consul_port = "${var.consul_port}"
+        consul_datacenter = "${var.consul_datacenter}"
+        consul_encrypt = "${var.consul_encrypt}"
     }
 }
 
