@@ -83,6 +83,7 @@ data "external" "power_on" {
 export VCD_AUTH='${var.vcd_username}@${var.vcd_org}:${var.vcd_password}'
 export VCD_URL='${var.vcd_url}'
 export VM_NAME='${var.name}-${count.index}'
+export ACTION='powerOn'
 bash ${path.module}/power_on.sh
 EOF
   ]
@@ -109,9 +110,16 @@ resource "null_resource" "postdestroy" {
   count = "${var.quantity}"
   provisioner "local-exec" {
     when = "destroy"
-    command = "${var.postdestroy}"
-    environment {
-      _NUMBER = "${count.index}"
+    program = [
+    "/bin/bash",
+    "-c",
+    <<EOF
+export VCD_AUTH='${var.vcd_username}@${var.vcd_org}:${var.vcd_password}'
+export VCD_URL='${var.vcd_url}'
+export VM_NAME='${var.name}-${count.index}'
+export ACTION='powerOff'
+bash ${path.module}/power_on.sh
+EOF
+  ]
     }
-  }
 }
