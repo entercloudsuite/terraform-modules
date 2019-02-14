@@ -1,0 +1,56 @@
+#cloud-config
+
+manage_etc_hosts: localhost
+
+users:
+  - default
+  - name: etcd
+    gecos: etcd runtime user
+    lock_passwd: true
+    system: true
+    shell: /bin/false
+
+write_files:
+  - content: |
+      #!/bin/bash
+      NODE_IP="$(ip addr sh dev $(ip r | grep default | awk '{ print $5 }') | grep "inet\b" | awk '{ print $2 }' | cut -d '/' -f 1)"
+      mkdir -p /etc/systemd/system/etcd.service.d/
+      cat > /etc/systemd/system/etcd.service.d/environment.conf<<EOF
+      [Service]
+      Environment="ETCD_INITIAL_CLUSTER_TOKEN=${etcd_token}"
+      Environment="ETCD_DATA_DIR=/var/lib/etcd"
+      Environment="ETCD_DISCOVERY_SRV=automium.consul"
+      Environment="ETCD_INITIAL_ADVERTISE_PEER_URLS=http://$NODE_IP:2380"
+      Environment="ETCD_LISTEN_PEER_URLS=http://$NODE_IP:2380"
+      Environment="ETCD_LISTEN_CLIENT_URLS=http://$NODE_IP:2379,http://127.0.0.1:2379"
+      Environment="ETCD_ADVERTISE_CLIENT_URLS=http://$NODE_IP:2379"
+      EOF
+      chmod 0644 /etc/systemd/system/etcd.service.d/environment.conf
+    path: /tmp/setup-etcd.sh
+    permission: 0755
+  - content: |
+      [Unit]
+      Description=etcd key-value store
+      Documentation=https://github.com/coreos/etcd
+
+      [Service]
+      User=etcd
+      Type=notify
+      ExecStart=/usr/local/bin/etcd
+      Restart=always
+      RestartSec=10s
+      LimitNOFILE=40000
+
+      [Install]
+      WantedBy=multi-user.target
+    path: /etc/systemd/system/etcd.service
+    permission: 0644
+
+
+runcmd:
+  - mkdir /var/lib/etcd && chown etcd:etcd /var/lib/etcd
+  - /bin/bash /tmp/setup-etcd.sh
+  - rm /tmp/setup-etcd.sh
+  - systemctl daemon-reload
+  - systemctl enable etcd
+  - systemctl start etcd
