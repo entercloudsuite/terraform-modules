@@ -78,6 +78,19 @@ bash ${path.module}/iso_upload.sh
 EOF
   ]
 }
+data "external" "power_on" {
+  count = "${var.quantity}"
+  program = [
+    "/bin/bash",
+    "-c",
+    <<EOF
+export VCD_AUTH='${var.vcd_username}@${var.vcd_org}:${var.vcd_password}'
+export VCD_URL='${var.vcd_url}'
+export VM_NAME='${var.name}'
+bash ${path.module}/power_on.sh
+EOF
+  ]
+}
 
 data "external" "image_sync" {
   program = [
