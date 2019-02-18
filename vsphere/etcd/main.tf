@@ -16,8 +16,6 @@ module "etcd" {
   vsphere_password = "${var.vsphere_password}"
   vsphere_server = "${var.vsphere_server}"
   keypair = "${var.keypair}"
-  discovery = "true"
-  discovery_port = "2380"
 }
 
 data "template_file" "cloud-config" {
