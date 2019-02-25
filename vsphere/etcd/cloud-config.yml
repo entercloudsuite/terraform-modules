@@ -81,11 +81,35 @@ write_files:
     permissions: '0755'
 
 runcmd:
+  - |
+      bash <<'EOF'
+      export COMPLETED=false
+      while [ "$COMPLETED" == "false" ]; do
+        (
+          apt-get update || true
+          apt-get install python-pip -y || true
+          set -e errexit
+          set -o pipefail
+          # workaround https://github.com/ansible/ansible/issues/21562
+          export HOME=/root
+          cd /usr/src/cloud
+          source venv/bin/activate
+          ansible-playbook -e ansible_python_interpreter=/usr/bin/python --connection=local playbook.yml
+          host -t srv etcd-server.service.automium.consul
+          while [[ $(host -t srv etcd-server.service.automium.consul |wc -l) < 3 ]]; do echo $(host -t srv etcd-server.service.automium.consul)'\n' && sleep 2;done
+        ) >> /var/log/cloud-scripts.log 2>&1
+        if [ $? == 0 ]; then
+          COMPLETED=true
+        fi
+        sleep 1
+      done
+      EOF
   - mkdir /var/lib/etcd && chown etcd:etcd /var/lib/etcd
   - /bin/bash /tmp/setup-etcd.sh
-  - rm /tmp/setup-etcd.sh
+    #  - rm /tmp/setup-etcd.sh
   - systemctl daemon-reload
   - systemctl enable etcd
+
   - systemctl start etcd
   - |
       bash <<'EOF'
